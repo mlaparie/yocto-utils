@@ -1,0 +1,720 @@
+#!/usr/bin/env bash
+
+# Increment logs if script interrupted
+trap 'sed -i "1s#^#$(date '\''+%Y-%m-%d %H:%M:%S'\'') - Script interrupted.\n#" "$logs"; exit' SIGINT
+
+# fzf options
+export FZF_DEFAULT_OPTS='--cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+
+# Logs file
+logs="yoctotool.log"
+if [ ! -f "$logs" ]; then
+    # If the log file does not exist, create it with an empty line
+    echo "" > "$logs"
+fi
+
+# Check mandatory dependencies
+dependencies=(fzf awk column less)
+missing_dependencies=0
+
+for dep in "${dependencies[@]}"; do
+    if ! command -v "$dep" &> /dev/null; then
+        echo "Error: dependency '$dep' not found." >&2
+	exit 1
+    fi
+done
+
+# Else, continue and increment logs
+sed -i "1s/^/$(date '+%Y-%m-%d %H:%M:%S') - Starting script.\n\n/" "$logs"
+
+# Check for yoctoget script
+if [ ! -f "./yoctoget" ]; then
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Missing dependency for fetching data: yoctoget.\n#" "$logs"
+    yoctoget_not_found=1
+fi
+
+# Check for R dependency
+if ! command -v Rscript &> /dev/null; then
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Missing dependency for graphing data: R (r-core).\n#" "$logs"
+    r_not_found=1
+fi
+
+# Optionally check for bat
+if ! command -v bat &> /dev/null; then
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Missing optional dependency: 'bat'.\n#" "$logs"
+fi
+
+# Functions
+# Fetch from vh4w
+fetch_data() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Fetch action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    if [ -f "yoctoget" ]; then
+	clear
+	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - yoctoget script started.\n#" "$logs"
+	./yoctoget
+    else
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - yoctoget script not found. Aborting.\n#" "$logs"
+	return
+    fi
+}
+
+# Select data folder
+select_folder() {
+    folder_path=$(find "data/" -mindepth 1 -maxdepth 1 -type d | sort | fzf --no-clear --preview 'find {} -type f -name "*.csv" | cut -d / -f 3-4' --preview-window=right:55%:nowrap --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+")
+
+    # Check if folder_path is empty, indicating Esc was pressed
+    if [ -z "$folder_path" ]; then
+        if [ $folder_selection_completed -eq 0 ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No folder selected.\n#" "$logs"
+	else
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Back to main menu.\n#" "$logs"
+        fi	
+        return 1 # Return a status indicating Esc was pressed
+    else
+        folder_selection_completed=1
+        result_subfolder="$folder_path/joined"
+        mkdir -p "$result_subfolder"
+    fi
+}
+
+# Join fetched files based on specified columns
+join_files() {
+    local file1="$1"
+    local file2="$2"
+    local col1="$3"
+    local col2="$4"
+    local temp_result=$(mktemp)
+    
+    if ! join -t ";" -1 "$col1" -2 "$col2" "$file1" "$file2" > "$temp_result"; then
+	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Join failed between $file1 and $file2.\n#" "$logs"
+	rm -f "$temp_result"
+        return 1
+    fi
+    echo "$temp_result"
+}
+
+# Main joining logic
+select_files_for_joining() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Join action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Join — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! select_folder; then
+	show_actions
+	return
+    fi    
+    selected_files=$(find "$folder_path" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 3 --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --prompt "▪—▪—□ Join — select files: " --preview 'column -s";" -t < {}' --preview-window right:55%:nowrap  --header "LIST
+  Tab: select, C-a: select all
+PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+$folder_path/")
+
+    IFS=$'\n' read -r -d '' -a files <<< "$selected_files"
+    if [ "${#files[@]}" -lt 2 ]; then
+	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Joining needs two or more files. Aborting.\n#" "$logs"
+	return
+    fi
+
+    # Initialize the joined file with the first file content
+    joined_file=$(mktemp)
+    cp "${files[0]}" "$joined_file"
+
+    # Start with the join field in the second position
+    col1=2
+    col2=2
+
+    # Adjusted loop logic
+    for file in "${files[@]:1}"; do
+        new_joined_file=$(join_files "$joined_file" "$file" "$col1" "$col2")
+        if [ "$new_joined_file" ] && [ -f "$new_joined_file" ]; then
+            mv "$new_joined_file" "$joined_file"
+            col1=1
+        else
+	    # Increment logs
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error joining files.\n#" "$logs"
+            rm -f "$joined_file"
+            return
+        fi
+    done
+
+    # Final verification moved here
+    if [ ! -s "$joined_file" ]; then
+	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Joined file is empty or does not exist. Aborting.\n#" "$logs"
+        rm -f "$joined_file"
+        return
+    fi
+
+    # Define the subfolder for the joined file and ensure it exists
+    result_subfolder="${folder_path}/joined"
+    mkdir -p "$result_subfolder"
+
+    # Define the path for the final result file
+    result_file="${result_subfolder}/joined_all.csv"
+    cp "$joined_file" "$result_file"
+
+    # Extract and display column headers for selection, fixing the column preview issue
+    if [ -s "$joined_file" ]; then
+	# Now perform header extraction and replacement operations on $joined_file before moving it
+	headers=$(head -1 "$joined_file" | tr ';' '\n' | nl -v1)
+	selected_columns=$(echo "$headers" | fzf --no-clear --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --with-nth 2.. --prompt "▪—▪—□ Join — select columns to keep: " --header "Tab: select, C-a: select all" --preview 'awk -F";" -v col={1} "{if (NR==1) print \$col; else print \$col}" '"$joined_file" --preview-window right:55%:nowrap | awk '{print $1}' | paste -sd ',' -)
+
+	# Construct the awk command based on selected columns
+	awk_cmd="awk -F';' -v cols=\"$selected_columns\" 'BEGIN{OFS=\";\"; split(cols, c, \",\");} {for (i in c) printf \"%s%s\", \$(c[i]), (i<length(c)?OFS:ORS)}'"
+
+	# Execute the awk command and save the result temporarily to keep original names if needed
+	eval "$awk_cmd" "$joined_file" > "$result_file"
+
+	# Clean up
+	rm "$joined_file"
+    
+	# Replace semicolons with commas
+	if [ -s "$result_file" ]; then
+	    # sed -i '' 's/;/,/g' "$result_file" # MacOS compatibility
+            sed -i 's/;/,/g' "$result_file"
+	    skip_folder_selecton=1
+	    rows_before=$(($(wc -l < "$file") - 1))
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: $rows_before rows in $result_file.\n#" "$logs"
+	else
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: final file is missing or empty.\n#" "$logs"
+	fi
+    else
+	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: joined file is missing or empty.\n#" "$logs"
+    fi
+    preview_file
+}
+
+# Rename headers
+rename_headers() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Rename headers action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Rename headers — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! select_folder; then
+	show_actions
+	return
+    fi
+
+    # Check if there are joined CSV files in the result folder
+    joined_files=$(find "$result_subfolder" -type f -name "*.csv")
+    if [ -z "$joined_files" ]; then
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Action not allowed on raw data, and no joined files found.\n#" "$logs"
+	return
+    fi
+    
+    while true; do
+	selected_file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□ Rename headers — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+$result_subfolder/")
+
+	# Read the current and replacement values from the user
+	if [ -z "$selected_file" ] ; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No file selected. Aborting.\n#" "$logs"
+	    return
+	else
+	    FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—□—▪ Rename headers — list new names: " --cycle --layout=reverse --border none --height=100%'
+	    new_column_names=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of new header names (e.g., "a,b,c", or press enter to keep original names' --preview 'column -s"," -t < '"$selected_file" --preview-window bottom:95%:nowrap)
+	fi
+	
+	# Check if new column names were provided
+	if [ -z "$new_column_names" ]; then
+	    # Convert selected column indices into names
+	    IFS=',' read -ra cols <<< "$selected_columns"
+	    column_names=()
+	    for idx in "${cols[@]}"; do
+		# Extracting the column name based on its index
+		column_name=$(echo "$headers" | awk -v idx="$idx" '$1==idx {print $2}')
+		column_names+=("$column_name")
+	    done
+	    # Join the column names into a comma-separated string
+	    new_column_names=$(IFS=,; echo "${column_names[*]}")
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Keeping original header names.\n#" "$logs"
+	    return
+	else
+	    # Update the result file with new column names
+	    sed -i "1s/.*/$new_column_names/" "$selected_file"
+	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: headers renamed.\n#" "$logs"
+	fi
+	
+    done
+}
+
+# Rename values
+rename_values() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Rename values action started.\n#" "$logs"
+    
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪—▪—▪ Rename values — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! select_folder; then
+	show_actions
+	return
+    fi
+
+    # Check if there are joined CSV files in the result folder
+    joined_files=$(find "$result_subfolder" -type f -name "*.csv")
+    if [ -z "$joined_files" ]; then
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Action not allowed on raw data, and no joined files found.\n#" "$logs"
+	return
+    fi
+    
+    while true; do
+	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□—▪—▪—▪ Rename values — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+$result_subfolder/")
+	
+	if [ -z "$file" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No file selected. Aborting.\n#" "$logs"
+            return
+	fi
+
+	# Display column headers for selection
+	headers=$(head -1 "$file" | tr ',' '\n' | nl -v1)
+	selected_column=$(echo "$headers" | fzf --no-clear --prompt "▪—▪—▪—□—▪—▪ Rename values — select columm: " --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --preview-window right:55%:nowrap --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+$file" --preview 'column -s"," -t < '"$file"  | awk '{print $1}')
+	
+	if [ -z "$selected_column" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No column selected. Aborting.\n#" "$logs"
+            return
+	fi
+
+	# # Read the current and replacement values from the user
+	FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—□—▪ Rename values — list original values: " --cycle --layout=reverse --border none --height=100%'
+	current_values=$(echo "" | fzf --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of current values to replace (e.g., "a,b,c")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
+
+	# Split the user input into array
+	IFS=',' read -ra current_values_array <<< "$current_values"
+	echo $current_values
+	echo $current_values_array
+
+	# Check if the array is empty
+	if [ ${#current_values_array[@]} -eq 0 ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No original values listed. Aborting.\n#" "$logs"
+	    return
+	fi
+
+	FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—▪—□ Rename values — list replacement values: " --cycle --layout=reverse --border none --height=100%'
+	replacement_values=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of replacement values (e.g., "c,d,e")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
+
+	IFS=',' read -ra replacement_values_array <<< "$replacement_values"
+	
+	# Check if the arrays have the same length
+	if [ ${#current_values_array[@]} -ne ${#replacement_values_array[@]} ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - The number of original and replacement values does not match. Aborting.\n#" "$logs"
+	    return
+	fi
+
+	# Build the awk command for value replacement
+	awk_script="BEGIN{FS=OFS=\",\"}"
+	for ((i=0; i<${#current_values_array[@]}; ++i)); do
+	    current_value="${current_values_array[$i]}"
+	    replacement_value="${replacement_values_array[$i]}"
+	    # Add a condition to the awk script for each pair of values
+	    awk_script+="{ if (\$$selected_column == \"$current_value\") \$$selected_column=\"$replacement_value\"; }"
+	done
+	awk_script+="{print}"
+
+	# Execute awk command to create the modified file
+	temp_output_file="${file%.csv}_temp_replaced.csv"
+
+	# Execute awk command to create the modified file
+	awk "$awk_script" "$file" > "$temp_output_file"
+	
+	if [[ $file =~ _renamedvalues\.csv$ ]]; then
+	    output_file="$file"
+	else
+	    output_file="${file%.csv}_renamedvalues.csv"
+	fi
+
+	# Move the temporary file to the final output file location
+	mv "$temp_output_file" "$output_file"
+
+	# Increment logs
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: $output_file.\n#" "$logs"
+    done
+}
+
+# Remove duplicates
+remove_duplicates() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Remove duplicates action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Remove duplicates — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! [ "$skip_folder_selecton" -eq 1 ]; then
+	if ! select_folder; then
+	    show_actions
+	    return
+	fi
+    fi
+
+    # Check if there are joined CSV files in the result folder
+    joined_files=$(find "$result_subfolder" -type f -name "*.csv")
+    if [ -z "$joined_files" ]; then
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Action not allowed on raw data, and no joined files found.\n#" "$logs"
+	return
+    fi
+    
+    while true; do
+	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□—▪ Remove duplicates — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+$result_subfolder/")
+	
+	if [ -z "$file" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No file selected. Aborting.\n#" "$logs"
+            return
+	else
+            headers=$(head -1 "$file" | tr ',' '\n' | nl -v1)
+            duplicate_check_columns=$(echo "$headers" | fzf --no-clear --bind='ctrl-a:select-all,left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --with-nth 2.. --prompt "▪—▪—▪—□ Remove duplicates — select column or column combination: " --header "LIST
+  Tab: select, C-a: select all
+PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+" --preview "awk -F',' -v col={1} 'NR==1 {print \$col} NR>1 {print \$col}' \"$file\"" --preview-window right:70%:nowrap | awk '{print $1}' | paste -sd ',' -)
+        
+            filtered_file="${result_subfolder}/joined_filtered.csv"
+            echo "" > "$filtered_file"
+
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Columns combined for duplicate removal: $duplicate_check_columns.\n#" "$logs"
+
+            duplicates_file="${result_subfolder}/joined_discarded_duplicates.csv"
+            echo "" > "$duplicates_file"
+
+            awk -F ',' -v cols="$duplicate_check_columns" -v duplicatesPath="$duplicates_file" 'BEGIN {split(cols, colNums, ",");}
+            {
+            key = "";
+            for(i=1; i<=length(colNums); i++) {
+                key = key $(colNums[i]);
+                if (i < length(colNums)) key = key FS;
+            }
+            if(seen[key]++) {
+                print > duplicatesPath;
+            } else {
+                print;
+            }
+            }' "$file" > "$filtered_file"
+
+            # Count rows after duplicate removal
+	    rows_before=$(($(wc -l < "$file") - 1))
+            rows_after=$(($(wc -l < "$filtered_file") -1))
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: $(($rows_before - $rows_after)) duplicate row(s) discarded; see $duplicates_file.\n#" "$logs"
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: $rows_after filtered rows in $filtered_file.\n#" "$logs"
+	fi
+    done
+}
+
+# Preview file
+preview_file() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Preview action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Preview — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! [ "$skip_folder_selecton" -eq 1 ]; then
+	if ! select_folder; then
+	    show_actions
+	    return
+	fi
+    fi
+    
+    while true; do
+	selected_file=$(find "$folder_path" -maxdepth 2 \( -name "*.csv" -o -name "*.html" \) | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□ Preview — select file: " --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.html$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+        
+        # If Esc is pressed (fzf returns 130), break the loop to re-select folder.
+        if [ $? -eq 130 ]; then
+            # Immediately try to select a different folder; if Esc is pressed again in select_folder, exit to show_actions.
+            if ! select_folder; then
+                show_actions
+                return
+            fi
+            # If a folder is successfully selected, the loop continues to file selection.
+            continue
+        fi
+
+        # If no file is selected, break the loop to exit or do further actions.
+        if [ -z "$selected_file" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No file selected. Aborting.\n#" "$logs"
+	    break
+        fi
+
+        parent_dir=$(echo "$selected_file" | rev | cut -d / -f 2 | rev)/
+	if [ "$parent_dir" == "graphs/" ]; then
+	    xdg-open "$selected_file" &>/dev/null
+	elif [ "$parent_dir" == "joined/" ]; then
+            sep=","
+	    color="always"
+	    clear
+	    pager_command
+        else
+            sep=";"
+	    color="never"
+            clear
+	    pager_command
+	fi
+
+    done
+}
+
+# Graph file
+graph_file() {
+    # Increment logs
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Graph action started.\n#" "$logs"
+
+    # Reset folder selection flag
+    folder_selection_completed=0
+
+    # Select folder
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Graph — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    if ! [ "$skip_folder_selecton" -eq 1 ]; then
+	if ! select_folder; then
+	    show_actions
+	    return
+	fi
+    fi
+    
+    while true; do
+        selected_file=$(find "$result_subfolder" -maxdepth 2 -name "*.csv" | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --marker="🮇 " --prompt "▪—▪—□—▪ Graph — select file: " --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+WARNING
+  Make sure you have a R pipeline specifically made to process
+  the selected file format and data type.
+
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+
+        # If no file is selected, break the loop to exit or do further actions.
+        if [ -z "$selected_file" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No file selected. Aborting.\n#" "$logs"
+            break
+        fi
+	
+        selected_pipeline=$(find -maxdepth 2 -name "*.R" | sort | fzf -d / --with-nth 3 --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --marker="🮇 " --prompt "▪—▪—▪—□ Graph — select R pipeline: " --header "PREVIEW
+  C-arrow: scroll, M-arrow: Home/End
+
+WARNING
+  This action comes with an example R pipeline (i2c-long-format.R)
+  that is only applicable to long format files, i.e., containing
+  'variable' and 'value' columns, instead of multiple variable
+  columns. It only supports files with 5 columns and 'variable'
+  containing integers from 1 to 20, e.g.,
+
+  datetime,factor1,factor2,variable,value
+  2024-03-01 12:00:00,100,30,1,0.7
+  2024-03-01 12:00:00,100,30,2,123
+  2024-03-01 13:00:00,100,30,1,0.5
+  2024-03-01 13:00:00,100,30,2,210
+  2024-03-01 14:00:00,100,30,1,0.4
+  2024-03-01 14:00:00,100,30,2,150
+
+  Such files can be produced by a Yocto-I2C and a job made to
+  iterate over multiple sensors then store values in consecutive
+  timed reports.
+
+  To use the graph action with different file formats, you need
+  to create a R pipeline tailored to your needs and save it in
+  a .R format in the pipelines/ subfolder.
+
+pipelines/
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+
+        # If no file is selected, break the loop to exit or do further actions.
+        if [ -z "$selected_pipeline" ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - No pipeline selected. Back to file selection.\n#" "$logs"
+	    continue
+        fi
+
+        # If Esc is pressed (fzf returns 130), break the loop to re-select folder.
+        if [ $? -eq 130 ]; then
+            # Immediately try to select a different folder; if Esc is pressed again in select_folder, exit to show_actions.
+            if ! select_folder; then
+                show_actions
+                return
+            fi
+            # If a folder is successfully selected, the loop continues to file selection.
+            continue
+        fi
+
+	# Execute pipeline
+	graph_folder="$folder_path"/graphs
+	mkdir -p "$graph_folder"
+	Rscript $selected_pipeline "$graph_folder" "$selected_file" || error=1
+	
+	if [ $error -eq 1 ]; then
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: failed to execute i2c-long-format.R, try running it manually.\n#" "$logs"
+            return 1
+	else
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: graphs generated in $graph_folder.\n#" "$logs"
+	    return 0
+	fi
+    done
+}
+
+pager_command() {
+    if command -v bat > /dev/null 2>&1; then
+	bat "$selected_file" --color="$color" -p | column -s"$sep" -t | bat -n
+    else
+	cat "$selected_file" | column -s"$sep" -t | less -N -S -#2
+    fi
+}
+
+# Show help
+show_help() {
+    echo "Usage: $0 [OPTION]..."
+    echo "A script to perform various operations on Yoctopuce data files."
+    echo "Runs in interactive mode if no option is provided."
+    echo
+    echo "Options:"
+    echo "  --fetch, -F URL             Fetch data from VirtualHub-for-web"
+    echo "  --join, -J FILES...         Join fetched data files"
+    echo "  --headers, -H FILE COLUMNS  Rename headers"
+    echo "  --values, -V FILE COLUMN    Rename values"
+    echo "  --duplicates, -D FILE COLS  Remove duplicates"
+    echo "  --preview, -P FILE          Preview file or view graph"
+    echo "  --graph, -G FILE            Graph data using R pipelines"
+    echo
+    echo "Examples:"
+    echo "  $0 --fetch http://example.com/virtualhub-for-web-instance"
+    echo "  $0 --join file1.csv file2.csv"
+    echo "  $0 --headers file.csv col1,col2 newcol1,newcol2"
+    echo "  $0 --values file.csv col val1,val2 newval1,newval2"
+    echo "  $0 --duplicates file.csv col1,col2"
+    echo "  $0 --preview file.csv"
+    echo "  $0 --graph file.csv"
+}
+
+# Runtime arguments
+# Parse arguments
+while [ $# -gt 0 ]; do
+    case $1 in
+        --fetch|-F)
+            # if [ $# -lt 2 ]; then
+            #     echo "Error: --fetch requires a URL argument." >&2
+            #     exit 1
+            # fi
+            fetch_data "$2"
+            shift 2
+            ;;
+        --join|-J)
+            select_files_for_joining "${@:2}"
+            # Assuming the rest are files, adjust if needed
+            exit 0
+            ;;
+        --headers|-H)
+            rename_headers "$2" "${@:3}"
+            exit 0
+            ;;
+        --values|-V)
+            rename_values "$2" "$3"
+            shift 3
+            ;;
+        --duplicates|-D)
+            remove_duplicates "$2" "${@:3}"
+            exit 0
+            ;;
+        --preview|-P)
+            preview_file "$2"
+            shift 2
+            ;;
+        --graph|-G)
+            graph_file "$2"
+            shift 2
+            ;;
+        --help|help|-h)
+	    show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+	    echo
+	    show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Action selection
+show_actions() {
+    if [ "$yoctoget_not_found" -eq 1 ]; then
+	fetch_action="Fetch data (missing dependency)"
+    else
+	fetch_action="Fetch data from VirtualHub-for-web"
+    fi
+    
+    if [ "$r_not_found" -eq 1 ]; then
+	graph_action="Graph data (missing dependency)"
+    else
+	graph_action="Graph data with R"
+    fi
+    
+    while true; do
+        actions=("$fetch_action" "Join fetched data files" "Rename headers" "Rename values" "Remove duplicates" "Preview file or view graph" "$graph_action" "Exit")
+        # Add green color to each action before displaying them in fzf
+	action=$(printf '\033[32m%s\033[0m\n' "${actions[@]}" | fzf --no-clear --ansi --prompt "□—▪—▪ Select an action: " --bind 'right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --preview-window right:65%:nowrap --preview "cat \"$logs\"" --header "C-space: toggle logs preview,
+C-arrow: scroll, M-arrow: Home/End
+
+")
+
+        exit_status=$?
+        if [ $exit_status -eq 130 ]; then
+	    sed -i "1s/^/$(date '+%Y-%m-%d %H:%M:%S') - Exiting script.\n/" "$logs"
+	    clear
+            exit 0
+        fi
+
+        # Remove color codes before switch-case
+        action=$(echo "$action" | sed 's/\x1b\[0-9;]*m//g')
+
+        case "$action" in
+            "Fetch data from VirtualHub-for-web") fetch_data ;;
+            "Join fetched data files") select_files_for_joining ;;
+            "Rename headers") rename_headers ;;
+            "Rename values") rename_values ;;
+            "Remove duplicates") remove_duplicates ;;
+            "Preview file or view graph") preview_file ;;
+            "Graph data with R") graph_file ;;
+            "Exit")
+		sed -i "1s/^/$(date '+%Y-%m-%d %H:%M:%S') - Exiting script.\n/" "$logs"
+		clear
+		exit 0
+		;;
+            *) echo "Invalid action selected. Returning to menu." ;;
+        esac
+    done
+}
+
+# Start script
+folder_selection_completed=0
+show_actions

@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# This script tries to get the inventory of Yoctopuce modules from one or
+# multiple Yoctopuce VirtualHub4Web instances (from their URLs), and then
+# allows selecting the modules to download the data from, in batch.
+# dependencies: yoctopuce command line binaries (YSensor only), fzf, awk
+# 
+# Author: [2023] Mathieu Laparie <mathieu.laparie [at] inrae [dot] fr>
+# 
+# GNU AFFERO GENERAL PUBLIC LICENSE
+
+URL_FILE="urls.txt"
+DATA_DIR="data"
+SECRET_FILE=$(cat secret.conf 2>/dev/null)
+
+# Check dependencies
+check_commands() {
+    local missing_commands=()
+
+    for cmd in fzf awk pv YSensor; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing_commands+=("$cmd")
+        fi
+    done
+
+    case ${#missing_commands[@]} in
+        0)
+            # All commands found, do nothing
+            ;;
+        *)
+            echo -e "\033[0;31mDependency error: the following binaries should be in your \$PATH: ${missing_commands[*]}\033[0m"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to prompt for password securely
+get_password() {
+    echo -n "Enter password for instance(s) (default taken from secret.conf): "
+    stty -echo
+    read password
+    stty echo
+    echo
+    password=${password:-$SECRET_FILE}
+}
+
+# Function to retrieve module inventory for a given URL
+get_module_inventory() {
+    local url=$1
+    local username=$2
+    local password=$3
+
+    # Modify the URL with username, password, and port
+    local modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
+        gsub(/^http:\/\//, "", url);
+        gsub(/\/$/, "", url);
+        sub(/\//, ":80/", url);
+        url = "http://" username ":" password "@" url;
+        print url;
+    }')
+    
+    # Get the list of available sensors
+    YSensor -r "$modified_url" inventory | awk -F '|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}' || fetcherror=1
+}
+
+# Function to download data for a module with a progress bar
+download_data() {
+    local url=$1
+    local username=$2
+    local password=$3
+    local module=$4
+    local instance=$5
+    local module_suffix=$6
+    local from=$7
+    if [[ "$from" == "0" ]]; then
+	local startdate="_all"
+    else
+	local startdate="_from_$(date -d "@$from" +%Y-%m-%d)"
+    fi
+    
+    # Modify the URL with username, password, and port
+    local modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
+        gsub(/^http:\/\//, "", url);
+        gsub(/\/$/, "", url);
+        sub(/\//, ":80/", url);
+        url = "http://" username ":" password "@" url;
+        print url;
+    }')
+
+    #local module_name=$(echo "$module" | cut -d ' ' -f 3)
+    local full_module_name="$(echo "$module" | awk -F '|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')$module_suffix"
+    echo -e " \033[0;32mDownloading data from module: $instance > $full_module_name\033[0m"
+    mkdir -p "$DATA_DIR/$instance"
+    YSensor -c -r "$modified_url" "$module" get_recordedData "$from" 0 | pv -tebr > "$DATA_DIR/$instance/$full_module_name$startdate.csv"
+}
+
+
+# Call the function to check the commands
+check_commands
+
+# Start
+printf " ┬ ┬┌─┐┌─┐┌┬┐┌─┐┌─┐┌─┐┌┬┐   A fzf wrapper to get
+ └┬┘│ ││   │ │ ││ ┬├┤  │     data from Yoctopuce
+  ┴ └─┘└─┘ ┴ └─┘└─┘└─┘ ┴      VirtualHub for Web\n\n"
+
+# Check if the urls file exists
+if [ -f "$URL_FILE" ]; then
+    read -p "Enter an instance URL or press Enter to use URL(s) from urls.txt: " entered_url
+
+    if [ -z "$entered_url" ]; then
+        urls=$(cat "$URL_FILE")
+        selected_urls=$(echo "$urls" | fzf --multi --select-1 --bind "alt-a:toggle-all" --header="SELECT INSTANCE(S) TO FETCH MODULES FROM…
+Tab: select line
+M-a: select all
+C-C: quit
+Note: the same credentials will be used for all instances
+
+")
+    else
+        url="$entered_url"
+        # Add the URL to urls.txt if it's not already present
+        if ! grep -Fxq "$url" "$URL_FILE" >/dev/null 2>&1; then
+            echo "$url" >> "$URL_FILE"
+            echo -e "\033[0;32mNew URL added to urls.txt.\033[0m"
+        fi
+        selected_urls="$url"
+    fi
+else
+    read -p "Enter an instance URL: " url
+    if [ -z "$url" ]; then
+        echo -e " \033[0;33murls.txt not found or empty. Please provide an instance URL.\033[0m"
+        exit 1
+    else
+        echo "$url" >> "$URL_FILE"
+        echo -e " \033[0;32mURL added to urls.txt.\033[0m"
+    fi
+    selected_urls="$url"
+fi
+
+if [ -z "$selected_urls" ]; then
+    exit 0
+else
+    read -p "Enter instance username [default: user]: " username
+    username=${username:-user}
+    get_password
+fi
+
+# Modify the selected URLs with username, password, and port
+modified_urls=""
+while read -r url; do
+    modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
+        gsub(/^http:\/\//, "", url);
+        gsub(/\/$/, "", url);
+        sub(/\//, ":80/", url);
+        url = "http://" username ":" password "@" url;
+        print url;
+    }')
+    modified_urls+="$modified_url"$'\n'
+done <<< "$selected_urls"
+modified_urls=$(echo "$modified_urls" | head -n -1)
+
+# Declare an array to store the URLs and an associative array to map instances to URLs
+declare -a urls_array
+declare -A instance_urls
+
+# Build the array of URLs and map instances to their URLs
+for url in $selected_urls; do
+    urls_array+=("$url")
+    instance=$(echo "$url" | awk -F '/' '{print $NF}')
+    instance_urls["$instance"]="$url"
+done
+
+# Build the list of modules from all selected URLs
+modules=""
+echo -e " \033[0;32mFetching available modules from selected instance URL(s)…\033[0m"
+for url in "${urls_array[@]}"; do
+    instance=$(echo "$url" | awk -F '/' '{print $NF}')
+    instance_modules=$(get_module_inventory "$url" "$username" "$password")
+    instance_modules_prefixed=$(echo "$instance_modules" | awk -v prefix="$instance > " '{print prefix $0}')
+    modules+="$instance_modules_prefixed"$'\n'
+done
+modules=$(echo "$modules" | head -n -1)
+
+# Select sensors using fzf
+selected_modules=$(echo "$modules" | fzf --multi  --select-1 --bind "alt-a:toggle-all"  --header="SELECT MODULE(S) TO DOWNLOAD DATA FROM…
+Tab: select line
+C-C: quit
+M-a: select all
+
+")
+
+if [ -z "$selected_modules" ]; then
+    exit 0
+else
+    read -p "Download data from YYYY-MM-DD (default: download from the beginning of the series): " from
+    if [[ -n "$from" ]]; then
+	if ! date -d "$from" >/dev/null 2>&1; then
+            echo -e " \033[0;33mInvalid date format. Please provide a valid YYYY-MM-DD date or leave empty.\033[0m"
+            exit 1
+	fi
+
+	from=$(date -d "$from" +%s)
+    else
+	from=0
+    fi
+fi
+
+# Download data for selected modules
+echo "$selected_modules" | while IFS= read -r module; do
+    instance=$(echo "$module" | awk -F ' ' '{print $1}')
+    module_name=$(echo "$module" | awk -F ' ' '{print $3}')
+    module_suffix=$(echo "$module" | awk -F ' ' '{print $4}')
+    if [[ -n "$module_suffix" ]]; then
+	module_suffix="_$module_suffix"
+    fi
+    url="${instance_urls[$instance]}"
+    download_data "$url" "$username" "$password" "$module_name" "$instance" "$module_suffix" "$from"
+done
+
+exit 0
