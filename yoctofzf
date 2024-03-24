@@ -65,7 +65,7 @@ fetch_data() {
 
 # Select data folder
 select_folder() {
-    folder_path=$(find "data/" -mindepth 1 -maxdepth 1 -type d | sort | fzf --no-clear --preview 'find {} -type f -name "*.csv" | cut -d / -f 3-4' --preview-window=right:55%:nowrap --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --header "PREVIEW
+    folder_path=$(find "data/" -mindepth 1 -maxdepth 1 -type d | sort | fzf --no-clear --preview 'find {} -type f -name "*.csv" | cut -d / -f 3-4' --preview-window=nowrap --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --header "PREVIEW
   C-arrow: scroll, M-arrow: Home/End
 
 ")
@@ -110,7 +110,7 @@ select_files_for_joining() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Join — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Join — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! select_folder; then
 	show_actions
 	return
@@ -205,7 +205,7 @@ rename_headers() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Rename headers — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Rename headers — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! select_folder; then
 	show_actions
 	return
@@ -265,7 +265,7 @@ rename_values() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪—▪—▪ Rename values — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪—▪—▪ Rename values — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:50%:nowrap --marker="🮇 "'
     if ! select_folder; then
 	show_actions
 	return
@@ -366,7 +366,7 @@ remove_duplicates() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Remove duplicates — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Remove duplicates — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:50%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
@@ -439,7 +439,7 @@ preview_file() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Preview — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Preview — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
@@ -497,7 +497,7 @@ graph_file() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Graph — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Graph — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
