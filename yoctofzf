@@ -397,7 +397,7 @@ $result_subfolder/")
 PREVIEW
   C-arrow: scroll, M-arrow: Home/End
 
-" --preview "awk -F',' -v col={1} 'NR==1 {print \$col} NR>1 {print \$col}' \"$file\"" --preview-window right:70%:nowrap | awk '{print $1}' | paste -sd ',' -)
+" --preview "awk -F',' -v col={1} 'NR==1 {print \$col} NR>1 {print \$col}' \"$file\"" --preview-window right:50%:nowrap | awk '{print $1}' | paste -sd ',' -)
         
             filtered_file="${result_subfolder}/joined_filtered.csv"
             echo "" > "$filtered_file"
