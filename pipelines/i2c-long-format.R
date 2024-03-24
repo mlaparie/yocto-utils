@@ -118,7 +118,7 @@ plots <- lapply(types, function(t) {
       x = ~datetime,
       y = ~value,
       color = ~node,
-      text = ~paste(datetime, "<br>", "Node", node, "<br>", variable, "=", value),
+      text = ~paste(datetime, "<br>", "Node ", node, "<br>", variable, " = ", value, sep = ""),
       hoverinfo = 'text',
       type = 'scatter',
       mode = 'lines+markers',
