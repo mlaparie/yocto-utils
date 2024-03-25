@@ -35,7 +35,7 @@ fi
 
 # Check for R dependency
 if ! command -v Rscript &> /dev/null; then
-    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Missing dependency for graphing data: R (r-core).\n#" "$logs"
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Missing dependency for plotting data: R (r-core).\n#" "$logs"
     r_not_found=1
 fi
 
@@ -65,7 +65,8 @@ fetch_data() {
 
 # Select data folder
 select_folder() {
-    folder_path=$(find "data/" -mindepth 1 -maxdepth 1 -type d | sort | fzf --no-clear --preview 'find {} -type f -name "*.csv" | cut -d / -f 3-4' --preview-window=nowrap --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --header "PREVIEW
+    folder_path=$(find "data/" -mindepth 1 -maxdepth 1 -type d | sort | fzf --no-clear --preview 'find {} -type f -name "*.csv" | cut -d / -f 3-4' --preview-window=nowrap --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 ")
@@ -114,10 +115,11 @@ select_files_for_joining() {
     if ! select_folder; then
 	show_actions
 	return
-    fi    
-    selected_files=$(find "$folder_path" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 3 --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --prompt "▪—▪—□ Join — select files: " --preview 'column -s";" -t < {}' --preview-window right:55%:nowrap  --header "LIST
+    fi  
+    selected_files=$(find "$folder_path" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 3 --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' -m --prompt "▪—▪—□ Join — select files: " --preview 'column -s";" -t < {}' --preview-window right:55%:nowrap  --header "LIST
   Tab: select, C-a: select all
 PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 $folder_path/")
@@ -169,7 +171,7 @@ $folder_path/")
     if [ -s "$joined_file" ]; then
 	# Now perform header extraction and replacement operations on $joined_file before moving it
 	headers=$(head -1 "$joined_file" | tr ';' '\n' | nl -v1)
-	selected_columns=$(echo "$headers" | fzf --no-clear --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --with-nth 2.. --prompt "▪—▪—□ Join — select columns to keep: " --header "Tab: select, C-a: select all" --preview 'awk -F";" -v col={1} "{if (NR==1) print \$col; else print \$col}" '"$joined_file" --preview-window right:55%:nowrap | awk '{print $1}' | paste -sd ',' -)
+	selected_columns=$(echo "$headers" | fzf --no-clear --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' -m --with-nth 2.. --prompt "▪—▪—□ Join — select columns to keep: " --header "Tab: select, C-a: select all" --preview 'awk -F";" -v col={1} "{if (NR==1) print \$col; else print \$col}" '"$joined_file" --preview-window right:55%:nowrap | awk '{print $1}' | paste -sd ',' -)
 
 	# Construct the awk command based on selected columns
 	awk_cmd="awk -F';' -v cols=\"$selected_columns\" 'BEGIN{OFS=\";\"; split(cols, c, \",\");} {for (i in c) printf \"%s%s\", \$(c[i]), (i<length(c)?OFS:ORS)}'"
@@ -193,7 +195,10 @@ $folder_path/")
     else
 	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: joined file is missing or empty.\n#" "$logs"
     fi
-    preview_file
+
+    # Set a flag indicating we just joined a file
+    preview_after_join=1
+    show_file
 }
 
 # Rename headers
@@ -205,7 +210,7 @@ rename_headers() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Rename headers — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Rename headers — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:45%:nowrap --marker="🮇 "'
     if ! select_folder; then
 	show_actions
 	return
@@ -219,7 +224,8 @@ rename_headers() {
     fi
     
     while true; do
-	selected_file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□ Rename headers — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+	selected_file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□ Rename headers — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 $result_subfolder/")
@@ -230,7 +236,7 @@ $result_subfolder/")
 	    return
 	else
 	    FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—□—▪ Rename headers — list new names: " --cycle --layout=reverse --border none --height=100%'
-	    new_column_names=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of new header names (e.g., "a,b,c", or press enter to keep original names' --preview 'column -s"," -t < '"$selected_file" --preview-window bottom:95%:nowrap)
+	    new_column_names=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --print-query --header 'Enter comma-separated list of new header names (e.g., "a,b,c", or press enter to keep original names' --preview 'column -s"," -t < '"$selected_file" --preview-window bottom:95%:nowrap)
 	fi
 	
 	# Check if new column names were provided
@@ -265,7 +271,7 @@ rename_values() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪—▪—▪ Rename values — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:50%:nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪—▪—▪ Rename values — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:45%:nowrap --marker="🮇 "'
     if ! select_folder; then
 	show_actions
 	return
@@ -279,7 +285,8 @@ rename_values() {
     fi
     
     while true; do
-	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□—▪—▪—▪ Rename values — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□—▪—▪—▪ Rename values — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 $result_subfolder/")
@@ -291,7 +298,8 @@ $result_subfolder/")
 
 	# Display column headers for selection
 	headers=$(head -1 "$file" | tr ',' '\n' | nl -v1)
-	selected_column=$(echo "$headers" | fzf --no-clear --prompt "▪—▪—▪—□—▪—▪ Rename values — select columm: " --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --preview-window right:55%:nowrap --header "PREVIEW
+	selected_column=$(echo "$headers" | fzf --no-clear --prompt "▪—▪—▪—□—▪—▪ Rename values — select columm: " --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --preview-window right:55%:nowrap --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 $file" --preview 'column -s"," -t < '"$file"  | awk '{print $1}')
@@ -303,7 +311,7 @@ $file" --preview 'column -s"," -t < '"$file"  | awk '{print $1}')
 
 	# # Read the current and replacement values from the user
 	FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—□—▪ Rename values — list original values: " --cycle --layout=reverse --border none --height=100%'
-	current_values=$(echo "" | fzf --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of current values to replace (e.g., "a,b,c")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
+	current_values=$(echo "" | fzf --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --print-query --header 'Enter comma-separated list of current values to replace (e.g., "a,b,c")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
 
 	# Split the user input into array
 	IFS=',' read -ra current_values_array <<< "$current_values"
@@ -317,7 +325,7 @@ $file" --preview 'column -s"," -t < '"$file"  | awk '{print $1}')
 	fi
 
 	FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—▪—□ Rename values — list replacement values: " --cycle --layout=reverse --border none --height=100%'
-	replacement_values=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --print-query --header 'Enter comma-separated list of replacement values (e.g., "c,d,e")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
+	replacement_values=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --print-query --header 'Enter comma-separated list of replacement values (e.g., "c,d,e")' --preview 'column -s"," -t < '"$file" --preview-window bottom:95%:nowrap)
 
 	IFS=',' read -ra replacement_values_array <<< "$replacement_values"
 	
@@ -366,7 +374,7 @@ remove_duplicates() {
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Remove duplicates — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:50%:nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Remove duplicates — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:40%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
@@ -382,7 +390,8 @@ remove_duplicates() {
     fi
     
     while true; do
-	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□—▪ Remove duplicates — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+	file=$(find "$result_subfolder" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 4 --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□—▪ Remove duplicates — select file: "  --preview 'column -s"," -t < {}' --preview-window right:55%:nowrap --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 $result_subfolder/")
@@ -392,12 +401,13 @@ $result_subfolder/")
             return
 	else
             headers=$(head -1 "$file" | tr ',' '\n' | nl -v1)
-            duplicate_check_columns=$(echo "$headers" | fzf --no-clear --bind='ctrl-a:select-all,left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' -m --with-nth 2.. --prompt "▪—▪—▪—□ Remove duplicates — select column or column combination: " --header "LIST
+            duplicate_check_columns=$(echo "$headers" | fzf --no-clear --bind='ctrl-a:select-all,left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' -m --with-nth 2.. --prompt "▪—▪—▪—□ Remove duplicates — select column or column combination: " --header "LIST
   Tab: select, C-a: select all
 PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
-" --preview "awk -F',' -v col={1} 'NR==1 {print \$col} NR>1 {print \$col}' \"$file\"" --preview-window right:50%:nowrap | awk '{print $1}' | paste -sd ',' -)
+" --preview "awk -F',' -v col={1} 'NR==1 {print \$col} NR>1 {print \$col}' \"$file\"" --preview-window right:45%:nowrap | awk '{print $1}' | paste -sd ',' -)
         
             filtered_file="${result_subfolder}/joined_filtered.csv"
             echo "" > "$filtered_file"
@@ -430,16 +440,16 @@ PREVIEW
     done
 }
 
-# Preview file
-preview_file() {
+# Show file
+show_file() {
     # Increment logs
-    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Preview action started.\n#" "$logs"
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Show action started.\n#" "$logs"
 
     # Reset folder selection flag
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Preview — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪ Show — select a data folder: " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
@@ -448,11 +458,17 @@ preview_file() {
     fi
     
     while true; do
-	selected_file=$(find "$folder_path" -maxdepth 2 \( -name "*.csv" -o -name "*.html" \) | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --prompt "▪—▪—□ Preview — select file: " --header "PREVIEW
+	selected_file=$(find "$folder_path" -maxdepth 2 \( -name "*.csv" -o -name "*.html" \) | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□ Preview — select file: " --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 " --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.html$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
         
+	# Reset skip_folder_selection when coming from join action  so that foler selection is possible again after going back
+	if [ "$preview_after_join" -eq 1 ] && [ "$skip_folder_selecton" -eq 1 ]; then
+	    skip_folder_selecton=0
+	fi
+	
         # If Esc is pressed (fzf returns 130), break the loop to re-select folder.
         if [ $? -eq 130 ]; then
             # Immediately try to select a different folder; if Esc is pressed again in select_folder, exit to show_actions.
@@ -471,7 +487,7 @@ preview_file() {
         fi
 
         parent_dir=$(echo "$selected_file" | rev | cut -d / -f 2 | rev)/
-	if [ "$parent_dir" == "graphs/" ]; then
+	if [ "$parent_dir" == "plots/" ]; then
 	    xdg-open "$selected_file" &>/dev/null
 	elif [ "$parent_dir" == "joined/" ]; then
             sep=","
@@ -488,16 +504,16 @@ preview_file() {
     done
 }
 
-# Graph file
-graph_file() {
+# Plot file
+plot_file() {
     # Increment logs
-    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Graph action started.\n#" "$logs"
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Pot action started.\n#" "$logs"
 
     # Reset folder selection flag
     folder_selection_completed=0
 
     # Select folder
-    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Graph — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
+    FZF_DEFAULT_OPTS='--prompt "▪—□—▪—▪ Plot — select a data folder with joined file(s): " --cycle --layout=reverse --border none --height=100% --preview-window=right:55%:nowrap --marker="🮇 "'
     if ! [ "$skip_folder_selecton" -eq 1 ]; then
 	if ! select_folder; then
 	    show_actions
@@ -506,7 +522,8 @@ graph_file() {
     fi
     
     while true; do
-        selected_file=$(find "$result_subfolder" -maxdepth 2 -name "*.csv" | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --marker="🮇 " --prompt "▪—▪—□—▪ Graph — select file: " --header "PREVIEW
+        selected_file=$(find "$result_subfolder" -maxdepth 2 -name "*.csv" | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --marker="🮇 " --prompt "▪—▪—□—▪ Plot — select file: " --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 WARNING
@@ -521,31 +538,29 @@ WARNING
             break
         fi
 	
-        selected_pipeline=$(find -maxdepth 2 -name "*.R" | sort | fzf -d / --with-nth 3 --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top' --marker="🮇 " --prompt "▪—▪—▪—□ Graph — select R pipeline: " --header "PREVIEW
+        selected_pipeline=$(find -maxdepth 2 -name "*.R" | sort | fzf -d / --with-nth 3 --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --marker="🮇 " --prompt "▪—▪—▪—□ Plot — select R pipeline: " --header "PREVIEW
+  C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
 WARNING
   This action comes with an example R pipeline (i2c-long-format.R)
   that is only applicable to long format files, i.e., containing
-  'variable' and 'value' columns, instead of multiple variable
-  columns. It only supports files with 5 columns and 'variable'
-  containing integers from 1 to 20, e.g.,
+  'variable' and 'value' columns, instead of a column per variable.
+  It is made for files with 5 columns, and a 'variable' containing
+  integers from 1 to 20, e.g.:
 
   datetime,factor1,factor2,variable,value
   2024-03-01 12:00:00,100,30,1,0.7
   2024-03-01 12:00:00,100,30,2,123
   2024-03-01 13:00:00,100,30,1,0.5
   2024-03-01 13:00:00,100,30,2,210
-  2024-03-01 14:00:00,100,30,1,0.4
-  2024-03-01 14:00:00,100,30,2,150
 
-  Such files can be produced by a Yocto-I2C and a job made to
-  iterate over multiple sensors then store values in consecutive
-  timed reports.
+  Such format can be produced by a Yocto-I2C and a job made to
+  iterate over multiple sensors in consecutive timed reports.
 
-  To use the graph action with different file formats, you need
-  to create a R pipeline tailored to your needs and save it in
-  a .R format in the pipelines/ subfolder.
+  To use the plot action with other file formats, you need to
+  create a R pipeline tailored to your needs and save it as a
+  .R file in the pipelines/ subfolder.
 
 pipelines/
 " --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
@@ -568,15 +583,15 @@ pipelines/
         fi
 
 	# Execute pipeline
-	graph_folder="$folder_path"/graphs
-	mkdir -p "$graph_folder"
-	Rscript $selected_pipeline "$graph_folder" "$selected_file" || error=1
+	plot_folder="$folder_path"/plots
+	mkdir -p "$plot_folder"
+	Rscript $selected_pipeline "$plot_folder" "$selected_file" || error=1
 	
 	if [ $error -eq 1 ]; then
             sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: failed to execute i2c-long-format.R, try running it manually.\n#" "$logs"
             return 1
 	else
-            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: graphs generated in $graph_folder.\n#" "$logs"
+            sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: plots generated in $plot_folder.\n#" "$logs"
 	    return 0
 	fi
     done
@@ -602,8 +617,8 @@ show_help() {
     echo "  --headers, -H FILE COLUMNS  Rename headers"
     echo "  --values, -V FILE COLUMN    Rename values"
     echo "  --duplicates, -D FILE COLS  Remove duplicates"
-    echo "  --preview, -P FILE          Preview file or view graph"
-    echo "  --graph, -G FILE            Graph data using R pipelines"
+    echo "  --show, -S FILE             Show data file or plot"
+    echo "  --plot, -P FILE             Plot data using R pipelines"
     echo
     echo "Examples:"
     echo "  $0 --fetch http://example.com/virtualhub-for-web-instance"
@@ -611,8 +626,8 @@ show_help() {
     echo "  $0 --headers file.csv col1,col2 newcol1,newcol2"
     echo "  $0 --values file.csv col val1,val2 newval1,newval2"
     echo "  $0 --duplicates file.csv col1,col2"
-    echo "  $0 --preview file.csv"
-    echo "  $0 --graph file.csv"
+    echo "  $0 --show file.csv"
+    echo "  $0 --plot file.csv"
 }
 
 # Runtime arguments
@@ -644,12 +659,12 @@ while [ $# -gt 0 ]; do
             remove_duplicates "$2" "${@:3}"
             exit 0
             ;;
-        --preview|-P)
-            preview_file "$2"
+        --show|-S)
+            show_file "$2"
             shift 2
             ;;
-        --graph|-G)
-            graph_file "$2"
+        --plot|-P)
+            plot_file "$2"
             shift 2
             ;;
         --help|help|-h)
@@ -674,13 +689,13 @@ show_actions() {
     fi
     
     if [ ! -z "$r_not_found" ]; then
-	graph_action="Graph data (missing dependency)"
+	plot_action="Plot data (missing dependency)"
     else
-	graph_action="Graph data with R"
+	plot_action="Plot data with R"
     fi
     
     while true; do
-        actions=("$fetch_action" "Join fetched data files" "Rename headers" "Rename values" "Remove duplicates" "Preview file or view graph" "$graph_action" "Exit")
+        actions=("$fetch_action" "Join fetched data files" "Rename headers" "Rename values" "Remove duplicates" "Show file or plot" "$plot_action" "Exit")
         # Add green color to each action before displaying them in fzf
 	action=$(printf '\033[32m%s\033[0m\n' "${actions[@]}" | fzf --no-clear --ansi --prompt "□—▪—▪ Select an action: " --bind 'right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --preview-window right:65%:nowrap --preview "cat \"$logs\"" --header "C-space: toggle logs preview,
 C-arrow: scroll, M-arrow: Home/End
@@ -703,8 +718,8 @@ C-arrow: scroll, M-arrow: Home/End
             "Rename headers") rename_headers ;;
             "Rename values") rename_values ;;
             "Remove duplicates") remove_duplicates ;;
-            "Preview file or view graph") preview_file ;;
-            "Graph data with R") graph_file ;;
+            "Show file or plot") show_file ;;
+            "Plot data with R") plot_file ;;
             "Exit")
 		sed -i "1s/^/$(date '+%Y-%m-%d %H:%M:%S') - Exiting script.\n/" "$logs"
 		clear
