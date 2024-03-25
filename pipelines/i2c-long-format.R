@@ -7,6 +7,7 @@ suppressMessages(library(plotly))
 suppressMessages(library(lubridate))
 suppressMessages(library(wesanderson))
 suppressMessages(library(htmlwidgets))
+suppressMessages(library(UpSetR))
 
 # Get the arguments passed to the script
 args <- commandArgs(trailingOnly = TRUE)
@@ -21,13 +22,14 @@ folder <- args[1]
 # vh4w <- readLines(con="stdin", 1)
 # Else set the variable manually:
 # vh4w <- "v02"
+# df <- fread("~/Projects/yocto-utils/data/v02/joined/joined_filtered.csv", sep = ",")
 
 # Load data
 df <- fread(file_arg, sep = ",")
 colnames(df) <- c("datetime", "node", "second", "variable", "value")
 
 # Variable mutations
-df <- df  %>% mutate(yday = yday(datetime)) %>%
+df <- df %>% mutate(yday = yday(datetime)) %>%
     mutate(variable.orig = variable) %>%
     mutate(node = as.factor(node)) %>%
     mutate(variable = as.factor(recode(as.character(variable),
@@ -77,17 +79,19 @@ all_combinations <- expand.grid(variable = levels(df$variable), node = unique(df
 # Left join to ensure all combinations are represented in df_full
 df_full <- left_join(all_combinations, df, by = c("node", "variable", "type"))
 
-# Fill in NA for 'datetime' and 'value' where 'type' is present but 'datetime' and 'value' are missing
-df_full <- df_full %>%
-  mutate(datetime = if_else(is.na(datetime) & !is.na(type), as.POSIXct(NA), datetime),
-         value = if_else(is.na(value) & !is.na(type), NA_real_, value))
+# Round datetime to 3 minutes (which is longer than a full station wake) and fill in
+# NA for 'datetime' and 'value' where 'type' is present but 'datetime' and 'value' are missing
+df_rounded <- df_full %>%
+    mutate(datetime = round_date(datetime, unit = "3 minutes")) %>%
+    mutate(datetime = if_else(is.na(datetime) & !is.na(type), as.POSIXct(NA), datetime),
+           value = if_else(is.na(value) & !is.na(type), NA_real_, value))
 
 # Plots
 # Set output directory
 setwd(folder)
 
 # ggplot
-g1 <- df_full %>%
+g1 <- df_rounded %>%
   ggplot(aes(x = datetime, y = value, color = variable)) +
   geom_point(alpha = 0.7, size = 0.7, aes(text = paste(datetime, "<br>", variable, " = ", value, sep = ""))) +
   geom_line(alpha = 0.7, lwd = 0.2) +
@@ -145,7 +149,7 @@ plots <- lapply(types, function(t) {
   return(p)
 })
 
-dashboard <- subplot(plots, nrows = length(types), shareX = TRUE, shareY = FALSE) %>% layout(
+timeseries <- subplot(plots, nrows = length(types), shareX = TRUE, shareY = FALSE) %>% layout(
     plot_bgcolor='#e5ecf6',
     xaxis = list(
         rangeselector = list(
@@ -198,21 +202,46 @@ dashboard <- subplot(plots, nrows = length(types), shareX = TRUE, shareY = FALSE
                 list(method = "restyle",
                      args = list("mode", "lines"),
                      label = "Lines")))))
-dashboard
-saveWidget(dashboard, "dashboard.html", selfcontained = TRUE)
+timeseries
+saveWidget(timeseries, "timeseries.html", selfcontained = TRUE)
 
 # Overview with type legends
-summary <- df %>% group_by(type) %>%
-    mutate(hour = hour(datetime)) %>%
-    do(p = plot_ly(.,
-    x = ~datetime, 
-    y = ~value, 
-    color = ~variable, 
-#    frame = ~node,
-    text = ~node,
-    hoverinfo = 'text',
-    type = 'scatter',
-    mode = 'markers')) %>%
-    subplot(nrows = 1, shareX = TRUE, shareY = FALSE)
-summary
-saveWidget(summary, "summary.html", selfcontained = TRUE)
+## summary <- df %>% group_by(type) %>%
+##     mutate(hour = hour(datetime)) %>%
+##     do(p = plot_ly(.,
+##     x = ~datetime, 
+##     y = ~value, 
+##     color = ~variable, 
+## #    frame = ~node,
+##     text = ~node,
+##     hoverinfo = 'text',
+##     type = 'scatter',
+##     mode = 'markers')) %>%
+##     subplot(nrows = 1, shareX = TRUE, shareY = FALSE)
+## summary
+## saveWidget(summary, "summary.html", selfcontained = TRUE)
+
+## # Check missing data
+## df_wide_rounded <- df_rounded %>% select(-c(variable.orig, type)) %>%
+##     pivot_wider(names_from = variable,
+##                 values_from = value) %>%
+##     group_by(datetime, node) %>%
+## summarise(across(c(second, yday), ~unique(.x)[1]),
+##           across(5:ncol(.)-2, mean, na.rm = TRUE), # Apply mean to all numerical columns after 'yday'
+##           .groups = 'drop') # This will drop the grouping, so the final tibble is no longer grouped
+
+## binary_df <- df_wide_rounded %>%
+##     pivot_longer(cols = -c(datetime, node), names_to = "variable", values_to = "value") %>%
+##     mutate(missing = ifelse(is.na(value), 1, 0)) %>%
+##     select(datetime, node, variable, missing) %>%
+##     unite(col = "date_node", c(datetime, node), remove = FALSE) %>%
+##     spread(key = variable, value = missing, fill = 0) %>%
+##     data.frame()
+
+## binary_df %>% select(-c("date_node", "datetime", "yday", "second")) %>%
+##     upset(., sets = names(.)[-1],
+##           query.legend = "bottom",
+##           # order.by = "freq",
+##           empty.intersections = "on",
+##           sets.x.label = "Number of values",
+##           mainbar.y.label = "Number of missing combinations")

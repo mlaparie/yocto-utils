@@ -108,9 +108,9 @@ if [ -f "$URL_FILE" ]; then
 
     if [ -z "$entered_url" ]; then
         urls=$(cat "$URL_FILE")
-        selected_urls=$(echo "$urls" | fzf --multi --select-1 --bind "alt-a:toggle-all" --header="SELECT INSTANCE(S) TO FETCH MODULES FROM…
+        selected_urls=$(echo "$urls" | fzf --multi --select-1 --bind "ctrl-a:toggle-all" --header="SELECT INSTANCE(S) TO FETCH MODULES FROM…
 Tab: select line
-M-a: select all
+C-a: select all
 C-C: quit
 Note: the same credentials will be used for all instances
 
@@ -181,10 +181,10 @@ done
 modules=$(echo "$modules" | head -n -1)
 
 # Select sensors using fzf
-selected_modules=$(echo "$modules" | fzf --multi  --select-1 --bind "alt-a:toggle-all"  --header="SELECT MODULE(S) TO DOWNLOAD DATA FROM…
+selected_modules=$(echo "$modules" | fzf --multi  --select-1 --bind "ctrl-a:toggle-all"  --header="SELECT MODULE(S) TO DOWNLOAD DATA FROM…
 Tab: select line
 C-C: quit
-M-a: select all
+C-a: select all
 
 ")
 

@@ -56,11 +56,20 @@ fetch_data() {
     if [ -f "yoctoget" ]; then
 	clear
 	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - yoctoget script started.\n#" "$logs"
-	./yoctoget
+	./yoctoget || yoctoget_error=1
     else
         sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - yoctoget script not found. Aborting.\n#" "$logs"
 	return
     fi
+
+    if [ $yoctoget_error -eq 1 ]; then
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: script failed, try running yoctoget manually.\n#" "$logs"
+        return 1
+    else
+        sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Success: script completed.\n#" "$logs"
+	return 0
+    fi
+
 }
 
 # Select data folder
@@ -236,7 +245,7 @@ $result_subfolder/")
 	    return
 	else
 	    FZF_DEFAULT_OPTS='--prompt "▪—▪—▪—▪—□—▪ Rename headers — list new names: " --cycle --layout=reverse --border none --height=100%'
-	    new_column_names=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --print-query --header 'Enter comma-separated list of new header names (e.g., "a,b,c", or press enter to keep original names' --preview 'column -s"," -t < '"$selected_file" --preview-window bottom:95%:nowrap)
+	    new_column_names=$(echo "" | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --print-query --header 'Enter comma-separated list of new header names (e.g., "a,b,c"), or press enter to keep original names' --preview 'column -s"," -t < '"$selected_file" --preview-window bottom:95%:nowrap)
 	fi
 	
 	# Check if new column names were provided
