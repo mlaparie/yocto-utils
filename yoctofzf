@@ -467,7 +467,7 @@ show_file() {
     fi
     
     while true; do
-	selected_file=$(find "$folder_path" -maxdepth 2 \( -name "*.csv" -o -name "*.html" \) | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□ Preview — select file: " --header "PREVIEW
+	selected_file=$(find "$folder_path" -maxdepth 2 \( -name "*.csv" -o -name "*.html" \) | sort | fzf --no-clear --bind='left:abort,right:accept,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' --prompt "▪—▪—□ Show — select file: " --header "PREVIEW
   C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
