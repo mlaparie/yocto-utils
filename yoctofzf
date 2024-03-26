@@ -62,7 +62,7 @@ fetch_data() {
 	return
     fi
 
-    if [ $yoctoget_error -eq 1 ]; then
+    if [ ${yoctoget_error-0} -eq 1 ]; then
         sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: script failed, try running yoctoget manually.\n#" "$logs"
         return 1
     else

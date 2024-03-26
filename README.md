@@ -1,4 +1,4 @@
-[![asciicast](pics/ss20240324-235207.png)](https://asciinema.org/a/648895)
+[![asciicast](pics/ss20240324-235207.png)](https://asciinema.org/a/649213)
 
 [![asciicast](pics/ss20230609-183436.png)](https://asciinema.org/a/8uMlxGa7KWx3HxRTz8YIeyByW)
 
