@@ -102,7 +102,10 @@ overview <- df_rounded %>%
     ggplot(aes(x = datetime, y = value, color = variable)) +
     geom_point(alpha = 0.7, size = 0.7, aes(text = paste(datetime, "<br>", variable, " = ", value, sep = ""))) +
     geom_line(alpha = 0.7, lwd = 0.2) +
-    scale_color_viridis(end = 0.9, option = "C", discrete = TRUE) +
+    # scale_color_viridis(n = 7, end = 0.9, option = "C", discrete = TRUE) +
+    # Loop over 5 viridis colours instead
+    scale_color_manual(values = rep(viridis::viridis(5, option = "C", end = 0.9),
+                                    length.out = length(unique(df_rounded$variable)))) +
     facet_grid(type ~ node, scales = "free_y") +
     theme(axis.text.x = element_text(angle = -45, vjust = 0.5, hjust=-0, size = 7), legend.title = element_blank()) +
     xlab("") + ylab("")
@@ -186,7 +189,7 @@ plots <- lapply(types, function(t) {
     layout(
         xaxis = list(title = "",
                      showgrid = TRUE,
-                     range = ~c(1000 * (as.numeric(ymd_hms(max(datetime))) - 86400),
+                     range = ~c(1000 * (as.numeric(ymd_hms(max(datetime))) - 86400 * 2),
                                 1000 * (as.numeric(ymd_hms(max(datetime)))))),
         yaxis = list(title = "",
                      fixedrange = FALSE),
@@ -212,6 +215,11 @@ timeseries <- subplot(plots, nrows = length(types), shareX = TRUE, shareY = FALS
                     list(
                         count = 1,
                         label = "1 d",
+                        step = "day",
+                        stepmode = "backward"),
+                    list(
+                        count = 2,
+                        label = "2 d",
                         step = "day",
                         stepmode = "backward"),
                     list(
