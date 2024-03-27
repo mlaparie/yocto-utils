@@ -516,7 +516,7 @@ show_file() {
 # Plot file
 plot_file() {
     # Increment logs
-    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Pot action started.\n#" "$logs"
+    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Plot action started.\n#" "$logs"
 
     # Reset folder selection flag
     folder_selection_completed=0
