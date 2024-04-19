@@ -1,15 +1,24 @@
+# This script prepares the data collected from modular I2C
+# sensor stations with a Yocto-I2C reporting the data in long
+# format (variable and value columns); see corresponding
+# repository at forgemia.inra.fr/mathieu.laparie. Several
+# dynamic plots are generated to explore teletransmission
+# history and quality, as well as data timeseries.
+# Author: Mathieu Laparie <mathieu.laparie [at] inrae.fr>
+
 # Environment
-options(browser = "chromium", warn = -1)
-# suppressMessages(library(tidyverse))
+# options(browser = "chromium", warn = -1)
 suppressMessages(library(data.table))
+suppressMessages(library(dplyr))
 suppressMessages(library(viridis))
 suppressMessages(library(plotly))
 suppressMessages(library(lubridate))
 suppressMessages(library(wesanderson))
 suppressMessages(library(ggplot2))
 suppressMessages(library(magrittr))
-suppressMessages(library(dplyr))
 suppressMessages(library(htmlwidgets))
+suppressMessages(library(plotly))
+# suppressMessages(library(tidyverse))
 # suppressMessages(library(UpSetR))
 
 # Get the arguments passed to the script
@@ -25,7 +34,7 @@ folder <- args[1]
 # vh4w <- readLines(con="stdin", 1)
 # Else set the variable manually:
 # vh4w <- "v02"
-# df <- fread("~/Projects/yocto-utils/data/v02.bak/joined/joined_filtered.csv", sep = ",")
+# df <- fread("~/Projects/yocto-utils/data/v01/joined/joined_all.csv", sep = ",")
 
 # Load data
 df <- fread(file_arg, sep = ",")
@@ -55,16 +64,21 @@ df <- df %>% mutate(yday = yday(datetime)) %>%
                              "17" = "L2",
                              "18" = "T3",
                              "19" = "RH3",
-                             "20" = "L3"))) %>%
+                             "20" = "L3",
+                             "96" = "Tbatt",
+                             "97" = "Vc1",
+                             "98" = "Vc2",
+                             "99" = "Vbatt"                             ))) %>%
     mutate(variable = factor(variable, levels = c("Voltage", "T1", "RH1", "L1",
                                                   "NTC1", "NTC2", "NTC3", "NTC4",
                                                   "NTC5", "NTC6", "NTC7", "NTC8",
                                                   "NTC9", "NTC10",
                                                   "T2", "RH2", "L2",
-                                                  "T3", "RH3", "L3"))) %>%
+                                                  "T3", "RH3", "L3",
+                                                  "Tbatt", "Vc1", "Vc2", "Vbatt"))) %>%
     mutate(type = case_when(
-               variable %in% c("Voltage") ~ "Voltage",
-               variable %in% c("T1", "T2", "T3") ~ "Temperature",
+               variable %in% c("Voltage", "Vc1", "Vc2", "Vbatt") ~ "Voltage",
+               variable %in% c("T1", "T2", "T3", "Tbatt") ~ "Temperature",
                variable %in% c("RH1", "RH2", "RH3") ~ "Humidity",
                variable %in% c("L1", "L2", "L3") ~ "Light",
                TRUE ~ "NTC" # Assumes all other variables fall under "NTC
@@ -76,8 +90,8 @@ df <- df %>% mutate(yday = yday(datetime)) %>%
 # This could involve expanding your dataframe to include these combinations with NA values
 all_combinations <- expand.grid(variable = levels(df$variable), node = unique(df$node), KEEP.OUT.ATTRS = FALSE) %>%
     mutate(type = case_when(
-               variable %in% c("Voltage") ~ "Voltage",
-               variable %in% c("T1", "T2", "T3") ~ "Temperature",
+               variable %in% c("Voltage", "Vc1", "Vc2", "Vbatt") ~ "Voltage",
+               variable %in% c("T1", "T2", "T3", "Tbatt") ~ "Temperature",
                variable %in% c("RH1", "RH2", "RH3") ~ "Humidity",
                variable %in% c("L1", "L2", "L3") ~ "Light",
                TRUE ~ "NTC" # Assumes all other variables fall under "NTC

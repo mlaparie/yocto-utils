@@ -471,7 +471,7 @@ show_file() {
   C-space: toggle preview,
   C-arrow: scroll, M-arrow: Home/End
 
-" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.html$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.html$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p --paging=always; else cat {}; fi; fi' --preview-window right:55%:nowrap)
         
 	# Reset skip_folder_selection when coming from join action  so that foler selection is possible again after going back
 	if [ "$preview_after_join" -eq 1 ] && [ "$skip_folder_selecton" -eq 1 ]; then
@@ -539,7 +539,7 @@ WARNING
   Make sure you have a R pipeline specifically made to process
   the selected file format and data type.
 
-" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p --paging=always; else cat {}; fi; fi' --preview-window right:55%:nowrap)
 
         # If no file is selected, break the loop to exit or do further actions.
         if [ -z "$selected_file" ]; then
@@ -572,7 +572,7 @@ WARNING
   .R file in the pipelines/ subfolder.
 
 pipelines/
-" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p; else cat {}; fi; fi' --preview-window right:55%:nowrap)
+" --preview 'FOLDER_PATH=$(dirname {}); FILE_NAME=$(basename {}); PARENT_DIR=$(basename "$FOLDER_PATH"); if [[ "$FILE_NAME" =~ \.csv$ ]]; then if [[ "$PARENT_DIR" == "joined" ]]; then column -s"," -t < {}; else column -s";" -t < {}; fi; elif [[ "$FILE_NAME" =~ \.R$ ]]; then if command -v bat > /dev/null; then bat --color=always {} -p --paging=always; else cat {}; fi; fi' --preview-window right:55%:nowrap)
 
         # If no file is selected, break the loop to exit or do further actions.
         if [ -z "$selected_pipeline" ]; then
@@ -608,7 +608,7 @@ pipelines/
 
 pager_command() {
     if command -v bat > /dev/null 2>&1; then
-	bat "$selected_file" --color="$color" -p | column -s"$sep" -t | bat -n
+	bat "$selected_file" --color="$color" -p | column -s"$sep" -t | bat -n -p --paging=always
     else
 	cat "$selected_file" | column -s"$sep" -t | less -N -S -#2
     fi
