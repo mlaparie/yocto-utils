@@ -1,11 +1,14 @@
 # Environment
 options(browser = "chromium", warn = -1)
-suppressMessages(library(tidyverse))
+# suppressMessages(library(tidyverse))
 suppressMessages(library(data.table))
 suppressMessages(library(viridis))
 suppressMessages(library(plotly))
 suppressMessages(library(lubridate))
 suppressMessages(library(wesanderson))
+suppressMessages(library(ggplot2))
+suppressMessages(library(magrittr))
+suppressMessages(library(dplyr))
 suppressMessages(library(htmlwidgets))
 # suppressMessages(library(UpSetR))
 
