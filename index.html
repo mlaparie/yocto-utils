@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URZF Yocto-viewer</title>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #c9d1d9;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            overflow: hidden;
+        }
+        #sidebar {
+            background-color: rgba(45, 45, 45, 0.8);
+            padding: 10px;
+            width: 250px;
+            height: auto;
+            position: absolute;
+            top: 60px;
+            left: 60px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            overflow: auto;
+            z-index: 1000;
+        }
+        #toggleBtn, #sidebarToggleBtn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #2d2d2d;
+            color: #c9d1d9;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        #inputOverlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(45, 45, 45, 0.9);
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 2000;
+        }
+        #inputOverlay input {
+            background-color: #2d2d2d;
+            color: #c9d1d9;
+            border: 1px solid #444;
+            padding: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            width: calc(100% - 20px);
+            margin: 0;
+        }
+        #help {
+            font-size: 10px;
+            display: none;
+        }
+        #helpToggle {
+            font-size: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .input-panel {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        label {
+            margin-right: 5px;
+        }
+        select {
+            background-color: #2d2d2d;
+            color: #c9d1d9;
+            border: 1px solid #444;
+            padding: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            width: 100%;
+        }
+        iframe {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+        #history-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        #history {
+            font-size: 10px;
+            padding: 2px 5px;
+            white-space: nowrap;
+            margin-top: 10px;
+            overflow: hidden;
+            text-align: center;
+            width: 85%;
+        }
+        .history-item {
+            display: inline-block;
+            padding: 2px 5px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .current-history {
+            font-weight: bold;
+            opacity: 1;
+        }
+        .non-current-history {
+            opacity: 0.8;
+        }
+        .further-history {
+            opacity: 0.6;
+        }
+        .history-arrow {
+            display: inline-block;
+            padding: 2px 10px;
+            cursor: pointer;
+            user-select: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .history-arrow.visible {
+            opacity: 1;
+        }
+        hr {
+            border: 0.5px solid #444;
+        }
+        #fullHistory {
+            background-color: rgba(45, 45, 45, 0.8);
+            font-size: 12px;
+            line-height: 80%;
+            padding: 12px;
+            width: 150px;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            right: 0;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.5);
+            overflow: auto;
+            display: none;
+            z-index: 1001;
+        }
+        #fullHistory .history-item {
+            display: block;
+            padding: 5px 0;
+        }
+        #closeFullHistory {
+            font-size: 12px;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        #noPlotMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.1);
+            font-size: 48px;
+            text-align: center;
+            display: block;
+            z-index: 1500;
+        }
+    </style>
+    <script>
+        let plotHistory = [];
+        let currentPlotIndex = -1;
+
+        function updatePlot(plotType = null) {
+            const station = document.getElementById('station').value;
+            const plot = plotType || document.getElementById('plot').value;
+            const iframe = document.getElementById('plotFrame');
+            const newSrc = plot === 'control-panel' ? `http://pheno.pclim.net/vh4w/${station}` : `data/${station}/plots/${plot}.html`;
+
+            if (currentPlotIndex === -1 || plotHistory[currentPlotIndex].src !== newSrc) {
+                plotHistory.push({ station, plot, src: newSrc });
+                currentPlotIndex = plotHistory.length - 1;
+                updateHistory();
+                updateFullHistory();
+            }
+
+            iframe.src = newSrc;
+            iframe.style.backgroundColor = plot === 'control-panel' ? 'white' : '';
+            iframe.style.display = 'block';
+            document.getElementById('noPlotMessage').style.display = 'none';
+            if (plotType) {
+                document.getElementById('plot').value = plotType;
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleMainPanel() {
+            const sidebar = document.getElementById('sidebar');
+            const toggleBtn = document.getElementById('sidebarToggleBtn');
+            if (sidebar.style.display === 'none' || sidebar.style.display === '') {
+                sidebar.style.display = 'block';
+                toggleBtn.style.display = 'none';
+            } else {
+                sidebar.style.display = 'none';
+                toggleBtn.style.display = 'block';
+            }
+        }
+
+        function toggleFullHistory() {
+            const fullHistoryPanel = document.getElementById('fullHistory');
+            fullHistoryPanel.style.display = fullHistoryPanel.style.display === 'none' ? 'block' : 'none';
+            if (fullHistoryPanel.style.display === 'block') {
+                updateFullHistory();
+            }
+        }
+
+        function updateFullHistory() {
+            const fullHistoryPanel = document.getElementById('fullHistory');
+            fullHistoryPanel.innerHTML = '<h3>History</h3><div id="closeFullHistory" onclick="toggleFullHistory()">✖</div>';
+            plotHistory.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item ' + (index === currentPlotIndex ? 'current-history' : '');
+                historyItem.textContent = `${item.station} - ${item.plot}`;
+                historyItem.onclick = () => {
+                    currentPlotIndex = index;
+                    document.getElementById('station').value = item.station;
+                    document.getElementById('plot').value = item.plot;
+                    const iframe = document.getElementById('plotFrame');
+                    iframe.src = item.src;
+                    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
+                    iframe.style.display = 'block';
+                    document.getElementById('noPlotMessage').style.display = 'none';
+                    updateHistory();
+                    updateFullHistory();
+                };
+                fullHistoryPanel.appendChild(historyItem);
+            });
+        }
+
+        function togglePlotFrame() {
+            const iframe = document.getElementById('plotFrame');
+            const noPlotMessage = document.getElementById('noPlotMessage');
+            if (iframe.style.display === 'none') {
+                iframe.style.display = 'block';
+                noPlotMessage.style.display = 'none';
+            } else {
+                iframe.style.display = 'none';
+                noPlotMessage.style.display = 'block';
+            }
+        }
+
+        function makeElementDraggable(el) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            let isDragging = false;
+            el.onmousedown = dragMouseDown;
+            el.ontouchstart = dragMouseDown;
+
+            function dragMouseDown(e) {
+                if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') {
+                    return;
+                }
+                e = e || window.event;
+                e.preventDefault();
+                pos3 = e.clientX || e.touches[0].clientX;
+                pos4 = e.clientY || e.touches[0].clientY;
+                document.onmouseup = closeDragElement;
+                document.ontouchend = closeDragElement;
+                document.onmousemove = elementDrag;
+                document.ontouchmove = elementDrag;
+                isDragging = true;
+            }
+
+            function elementDrag(e) {
+                if (!isDragging) return;
+                e = e || window.event;
+                e.preventDefault();
+                pos1 = pos3 - (e.clientX || e.touches[0].clientX);
+                pos2 = pos4 - (e.clientY || e.touches[0].clientY);
+                pos3 = e.clientX || e.touches[0].clientX;
+                pos4 = e.clientY || e.touches[0].clientY;
+                el.style.top = (el.offsetTop - pos2) + "px";
+                el.style.left = (el.offsetLeft - pos1) + "px";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.ontouchend = null;
+                document.onmousemove = null;
+                document.ontouchmove = null;
+                isDragging = false;
+            }
+        }
+
+        function handleKeyBindings(e) {
+            if (document.activeElement.tagName === 'INPUT' && document.activeElement.id === 'stationInput') {
+                if (e.key === 'Enter') {
+                    toggleInputOverlay();
+                }
+                return;
+            }
+
+            // Drop focus from dropdowns before handling keybinding functions
+            if (document.activeElement.tagName === 'SELECT') {
+                document.activeElement.blur();
+            }
+
+            switch (e.key) {
+                case '<':
+                    panHistory(-3);
+                    break;
+                case '>':
+                    panHistory(3);
+                    break;
+                case 'ArrowLeft':
+                    navigateHistory(-1);
+                    break;
+                case 'ArrowRight':
+                    navigateHistory(1);
+                    break;
+                case 'p':
+                case ',':
+                    navigateDropdown(-1);
+                    break;
+                case 'n':
+                case '.':
+                    navigateDropdown(1);
+                    break;
+                case 'b':
+                    togglePlotFrame();
+                    break;
+                case ' ':
+                    toggleMainPanel();
+                    break;
+                case 'h':
+                    toggleFullHistory();
+                    break;
+                case '?':
+                    toggleHelp();
+                    break;
+                case 'Enter':
+                    toggleInputOverlay();
+                    break;
+                case '1':
+                    updatePlot('summary');
+                    break;
+                case '2':
+                    updatePlot('overview');
+                    break;
+                case '3':
+                    updatePlot('missing');
+                    break;
+                case '4':
+                    updatePlot('timeseries');
+                    break;
+                case '5':
+                    updatePlot('control-panel');
+                    break;
+            }
+        }
+
+        function panHistory(direction) {
+            const historyContainer = document.getElementById('history');
+            const scrollAmount = historyContainer.scrollWidth / plotHistory.length * 1; // Scroll by one increment
+            historyContainer.scrollLeft += direction * scrollAmount;
+            updateArrowsVisibility();
+        }
+
+        function navigateHistory(direction) {
+            if (plotHistory.length === 0) return;
+            let newIndex = currentPlotIndex + direction;
+            if (newIndex < 0 || newIndex >= plotHistory.length) return;
+            currentPlotIndex = newIndex;
+            const { station, plot, src } = plotHistory[currentPlotIndex];
+            document.getElementById('station').value = station;
+            document.getElementById('plot').value = plot;
+            const iframe = document.getElementById('plotFrame');
+            iframe.src = src;
+            iframe.style.backgroundColor = plot === 'control-panel' ? 'white' : '';
+            iframe.style.display = 'block';
+            document.getElementById('noPlotMessage').style.display = 'none';
+            updateHistory();
+            updateFullHistory();
+        }
+
+        function navigateDropdown(direction) {
+            const stationSelect = document.getElementById('station');
+            const currentIndex = stationSelect.selectedIndex;
+            const newIndex = currentIndex + direction;
+            if (newIndex >= 0 && newIndex < stationSelect.options.length) {
+                stationSelect.selectedIndex = newIndex;
+                updatePlot();
+            }
+        }
+
+        function toggleInputOverlay() {
+            const overlay = document.getElementById('inputOverlay');
+            const input = document.getElementById('stationInput');
+            if (overlay.style.display === 'none' || overlay.style.display === '') {
+                overlay.style.display = 'block';
+                input.value = '';
+                input.focus();
+            } else {
+                const station = input.value;
+                const stationSelect = document.getElementById('station');
+                const options = stationSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (options[i].value === station) {
+                        stationSelect.selectedIndex = i;
+                        updatePlot();
+                        break;
+                    }
+                }
+                overlay.style.display = 'none';
+            }
+        }
+
+        function toggleHelp() {
+            const help = document.getElementById('help');
+            help.style.display = help.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function updateHistory() {
+            const historyContainer = document.getElementById('history');
+            const leftArrow = document.querySelector('.history-arrow.left');
+            const rightArrow = document.querySelector('.history-arrow.right');
+
+            if (plotHistory.length < 5) {
+                leftArrow.style.opacity = 0;
+                rightArrow.style.opacity = 0;
+            } else {
+                leftArrow.style.opacity = 1;
+                rightArrow.style.opacity = 1;
+            }
+
+            historyContainer.innerHTML = '';
+
+            plotHistory.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item ' + (index === currentPlotIndex ? 'current-history' : (Math.abs(index - currentPlotIndex) === 1 ? 'non-current-history' : 'further-history'));
+                historyItem.textContent = `${item.station}-${item.plot.charAt(0)}`;
+                historyItem.onclick = () => {
+                    currentPlotIndex = index;
+                    document.getElementById('station').value = item.station;
+                    document.getElementById('plot').value = item.plot;
+                    const iframe = document.getElementById('plotFrame');
+                    iframe.src = item.src;
+                    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
+                    iframe.style.display = 'block';
+                    document.getElementById('noPlotMessage').style.display = 'none';
+                    updateHistory();
+                    updateFullHistory();
+                };
+                historyContainer.appendChild(historyItem);
+            });
+
+            updateArrowsVisibility();
+            centerCurrentItem();
+        }
+
+        function updateArrowsVisibility() {
+            const leftArrow = document.querySelector('.history-arrow.left');
+            const rightArrow = document.querySelector('.history-arrow.right');
+            const historyContainer = document.getElementById('history');
+            leftArrow.classList.toggle('hidden', historyContainer.scrollLeft === 0);
+            rightArrow.classList.toggle('hidden', historyContainer.scrollWidth <= historyContainer.scrollLeft + historyContainer.clientWidth);
+        }
+
+        function centerCurrentItem() {
+            const currentHistoryItem = document.querySelector('.current-history');
+            if (currentHistoryItem) {
+                const historyContainer = document.getElementById('history');
+                const historyContainerWidth = historyContainer.offsetWidth;
+                const currentItemWidth = currentHistoryItem.offsetWidth;
+                const currentItemLeft = currentHistoryItem.offsetLeft;
+                const scrollLeft = currentItemLeft - (historyContainerWidth / 2) + (currentItemWidth / 2);
+                historyContainer.scrollLeft = scrollLeft;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            makeElementDraggable(document.getElementById('sidebar'));
+            document.addEventListener('keydown', handleKeyBindings);
+
+            const iframe = document.getElementById('plotFrame');
+            iframe.addEventListener('load', function () {
+                iframe.contentWindow.addEventListener('keydown', handleKeyBindings);
+            });
+
+            const historyContainer = document.getElementById('history');
+            historyContainer.addEventListener('wheel', function (e) {
+                if (e.deltaY !== 0) {
+                    historyContainer.scrollLeft += e.deltaY / Math.abs(e.deltaY) * (historyContainer.scrollWidth / plotHistory.length);
+                    e.preventDefault();
+                    updateArrowsVisibility();
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                const overlay = document.getElementById('inputOverlay');
+                const input = document.getElementById('stationInput');
+                if (overlay.style.display === 'block' && !overlay.contains(e.target)) {
+                    overlay.style.display = 'none';
+                }
+            });
+
+            document.getElementById('inputOverlay').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    toggleInputOverlay();
+                }
+            });
+
+            // Ensure help is hidden by default
+            document.getElementById('help').style.display = 'none';
+
+            // Programmatically trigger the 'h' and 'space' key presses
+            const eventH = new KeyboardEvent('keydown', { key: 'h' });
+            const eventSpace = new KeyboardEvent('keydown', { key: ' ' });
+            document.dispatchEvent(eventH);
+            document.dispatchEvent(eventSpace);
+        });
+    </script>
+</head>
+<body>
+    <button id="toggleBtn" onclick="toggleMainPanel()">☰</button>
+    <button id="sidebarToggleBtn" onclick="toggleMainPanel()" style="display: none;">☰</button>
+    <div id="sidebar">
+        <div class="input-panel">
+            <label for="station">Station:</label>
+            <select id="station" onchange="updatePlot()">
+                <option value="t01">t01</option>
+                <option value="t02">t02</option>
+                <option value="t03">t03</option>
+                <option value="t04">t04</option>
+                <option value="t05">t05</option>
+                <option value="t06">t06</option>
+                <option value="t07">t07</option>
+                <option value="t08">t08</option>
+                <option value="t09">t09</option>
+                <option value="t10">t10</option>
+                <option value="t21">t21</option>
+                <option value="t22">t22</option>
+                <option value="t23">t23</option>
+                <option value="t24">t24</option>
+                <option value="t27">t27</option>
+                <option value="v11">v11</option>
+                <option value="v16">v16</option>
+                <option value="v17">v17</option>
+                <option value="v18">v18</option>
+                <option value="v19">v19</option>
+                <option value="v25">v25</option>
+                <option value="v26">v26</option>
+            </select>
+        </div>
+        <div class="input-panel">
+            <label for="plot">View:</label>
+            <select id="plot" onchange="updatePlot()">
+                <option value="summary">1. summary</option>
+                <option value="overview">2. overview</option>
+                <option value="missing">3. missing</option>
+                <option value="timeseries">4. timeseries</option>
+                <option value="control-panel">5. control-panel</option>
+            </select>
+        </div>
+
+        <div id="history-container">
+            <div class="history-arrow left" onclick="panHistory(-3)"><</div>
+            <div id="history"></div>
+            <div class="history-arrow right" onclick="panHistory(3)">></div>
+        </div>
+
+        <hr>
+
+        <div id="helpToggle" onclick="toggleHelp()"><b>?:</b> Toggle help</div>
+        <div id="help">
+            <p><b>p/n:</b> Prev/next station available</p>
+            <p><b>&lt;/&gt;:</b> Scroll history bar</p>
+            <p><b>1-5:</b> Change view</p>
+            <p><b>b:</b> Toggle plot visibility</p>
+            <p><b>h:</b> Toggle detailed history</p>
+            <p><b>left/right:</b> Prev/next view in history</p>
+            <p><b>space:</b> Toggle main panel</p>
+            <p><b>enter:</b> Prompt for station name</p>
+        </div>
+    </div>
+
+    <div id="fullHistory"></div>
+
+    <div id="inputOverlay">
+        <input type="text" id="stationInput" placeholder="Enter station name" onkeydown="if(event.key === 'Enter') toggleInputOverlay()">
+    </div>
+
+    <div id="noPlotMessage">Select a station and view type</div>
+
+    <iframe id="plotFrame" src=""></iframe>
+</body>
+</html>
