@@ -105,12 +105,13 @@ df_full <- left_join(all_combinations, df, by = c("node", "variable", "type"))
 # Round datetime to 3 minutes (which is longer than a full station wake) and fill in
 # NA for 'datetime' and 'value' where 'type' is present but 'datetime' and 'value' are missing
 df_rounded <- df_full %>%
-    mutate(datetime = floor_date(datetime, unit = "30 minutes")) %>%
+    mutate(datetime = floor_date(datetime, unit = "60 minutes")) %>%
     mutate(datetime = if_else(is.na(datetime) & !is.na(type), as.POSIXct(NA), datetime),
            value = if_else(is.na(value) & !is.na(type), NA_real_, value))
 
 # Plots
 # Set output directory
+dir.create(file.path(folder))
 setwd(folder)
 
 # ggplot
@@ -143,7 +144,8 @@ summary <- df %>% group_by(type) %>%
     color = ~variable, # ~node,
     alpha = 0.5,
 #    frame = ~yday,
-    text = ~paste0("N", node, ", ", variable),
+    text = ~paste0("N", node, ", ", variable, " = ", value,
+                   "\n", datetime),
     hoverinfo = 'text',
     type = 'scatter',
     mode = 'markers'),
@@ -285,7 +287,7 @@ saveWidget(timeseries, "timeseries.html", selfcontained = TRUE)
 present <- df %>%
     select(-yday, -second, -variable.orig, -type) %>%
     filter(datetime >= last(datetime) - dhours(24)) %>%
-    mutate(datetime = floor_date(datetime, "30 minutes") - dminutes(0)) %>%
+    mutate(datetime = floor_date(datetime, "60 minutes") - dminutes(0)) %>%
     group_by(datetime, node, variable) %>%
     # Summarize each group: 1 if there's at least one non-NA value, 0 or NA otherwise
     summarise(value = value,
@@ -296,9 +298,9 @@ missingplot <- present %>%
     geom_raster(aes(text = paste(datetime, "<br>Node ", node, "<br>", variable, " = ",
                                  ifelse(presence == "Received", value, " missing"), sep = ""))) +
     scale_fill_grey(name = "", end = 0.6) +
-    labs(y = "Last 24 hours split in 30-min tiles starting at --:00",
+    labs(y = "Last 24 hours split in 60-min tiles starting at --:00",
          x = "",
-         title = "Wake ups every 30 min (--:-0) for 3 min (i.e., within single tiles)") +
+         title = "Wake ups every 60 min (--:00) for 3 min (i.e., within single tiles)") +
     theme(axis.text.x = element_text(size = 6, angle =-55,
                                      hjust = 0, vjust = 1),
           text = element_text(family = "monospace", size = 8),
