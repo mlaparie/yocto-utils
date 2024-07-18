@@ -20,7 +20,7 @@ The interactive mode (powered by `fzf`) should be fully functional. The non-inte
 
 The script should already be executable (else, do `chmod +x /path/to/yoctofzf`). Run it with `sh /path/to/yoctofzf`, `./yoctofzf`, `/path/to/./yoctofzf`.
 
-The script is organized into submenus for each of the main functions that you can navigate to or from using the arrows on the keyboard, or Enter and Escape. Upon selecting a function, you will be prompted to select station, sensors and data files to complete the actions. A preview panel on the right on the script will be displayed by default to show either the tree of the files in the directory you are browsing, or the content of the data files, depending on context. When at the root of the script, where the main functions can be selected, the preview shows a history logs of all actions taken, which will persist across sessions to allow checking what was done before, in case of any issue with the data.
+The script is organized into submenus for each of the main functions that you can navigate to or from using the arrows on the keyboard, or Enter and Escape. Upon selecting a function, you will be prompted to select station, sensors and data files to complete the actions. A preview panel on the right on the script will be displayed by default to show either the tree of the files in the directory you are browsing, or the content of the data files, depending on context. When at the root of the script, where the main functions can be selected, the preview shows a history logs of all actions taken, which will persist across sessions.
 
 To be completed.
 
