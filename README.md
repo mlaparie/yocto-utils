@@ -4,7 +4,7 @@
 
 # yoctofzf
 
-`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through any processing R pipelines (one example is provided to generate plots, but the script accepts new pipelines).
+`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through any processing _R_ pipelines (one example is provided to generate plots, but the script accepts new pipelines).
 
 The interactive mode (powered by `fzf`) should be fully functional. The non-interactive mode, with run-time options and arguments to automate batch operations, isn't written yet.
 
@@ -14,13 +14,13 @@ The interactive mode (powered by `fzf`) should be fully functional. The non-inte
 - `awk`
 - optional: `bat` (beware that on Debian, the `bat` binary is actually called `batcat`, meaning you may need to run `sudo ln -s $(which batcat) /usr/bin/bat` for `yoctofzf` to find it)
 - optional: `r-base` (the name of the package may change depending on the distribution, check `R` and `r-core` too).
-- optional: _R_ packages to be installed within _R_ with `install.packages(c("data.table", "dplyr", "ggplot2", "htmlwidgets", magrittr", "plotly", "viridis", "wesanderson"))`; each of these packages may have their own compiling dependencies; typically the distribution package `libcurl4-openssl-dev` or its variant in your distribution may be required
+- optional: _R_ packages to be installed within _R_ with `install.packages(c("data.table", "dplyr", "ggplot2", "htmlwidgets", "lubridate", "magrittr", "plotly", "viridis", "wesanderson"))`; each of these packages may have their own compiling dependencies; typically the distribution package `libcurl4-openssl-dev` or its variant in your distribution may be required
 
 ## Usage
 
 The script should already be executable (else, do `chmod +x /path/to/yoctofzf`). Run it with `sh /path/to/yoctofzf`, `./yoctofzf`, `/path/to/./yoctofzf`.
 
-The script is organized into submenus for each of the main functions that you can navigate to or from using the arrows on the keyboard, or Enter and Escape. Upon selecting a function, you will be prompted to select station, sensors and data files to complete the actions. A preview panel on the right on the script will be displayed by default to show either the tree of the files in the directory you are browsing, or the content of the data files, depending on context. When at the root of the script, where the main functions can be selected, the preview shows a history logs of all actions taken, which will persist across sessions to allow checking what was done before, in case of any issue with the data.
+The script is organized into submenus for each of the main functions that you can navigate to or from using the arrows on the keyboard, or Enter and Escape. Upon selecting a function, you will be prompted to select station, sensors and data files to complete the actions. A preview panel on the right on the script will be displayed by default to show either the tree of the files in the directory you are browsing, or the content of the data files, depending on context. When at the root of the script, where the main functions can be selected, the preview shows a history logs of all actions taken, which will persist across sessions.
 
 To be completed.
 
@@ -28,9 +28,9 @@ To be completed.
 
 `Yocto viewer` is an html page (`index.thml` in this repository) which you can open and bookmark to ease navigating through all the plots you may have generated for all your stations using `yoctofzf` and the _R_ pipelines:
 
-![interface](pics/ss20240718-094504.png =800x)
+<img src="pics/ss20240718-094504.png" alt="interface" width="1200"/>
 
-![example plot](ss20240718-094526.png =800x)
+<img src="pics/ss20240718-094526.png" alt="example plot" width="1200"/>
 
 # yoctoget
 
