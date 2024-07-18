@@ -4,18 +4,33 @@
 
 # yoctofzf
 
-`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through R pipelines.
+`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through any processing R pipelines (one example is provided to generate plots, but the script accepts new pipelines).
 
-The interactive mode (powered by `fzf`) should be fully functional. The non-interactive mode, with run-time options and arguments to automate operations, isn't written yet.
+The interactive mode (powered by `fzf`) should be fully functional. The non-interactive mode, with run-time options and arguments to automate batch operations, isn't written yet.
 
 ## Dependencies
 
 - `fzf`
 - `awk`
+- optional: `bat` (beware that on Debian, the `bat` binary is actually called `batcat`, meaning you may need to run `sudo ln -s $(which batcat) /usr/bin/bat` for `yoctofzf` to find it)
+- optional: `r-base` (the name of the package may change depending on the distribution, check `R` and `r-core` too).
+- optional: _R_ packages to be installed within _R_ with `install.packages(c("data.table", "dplyr", "ggplot2", "htmlwidgets", magrittr", "plotly", "viridis", "wesanderson"))`; each of these packages may have their own compiling dependencies; typically the distribution package `libcurl4-openssl-dev` or its variant in your distribution may be required
 
 ## Usage
 
+The script should already be executable (else, do `chmod +x /path/to/yoctofzf`). Run it with `sh /path/to/yoctofzf`, `./yoctofzf`, `/path/to/./yoctofzf`.
+
+The script is organized into submenus for each of the main functions that you can navigate to or from using the arrows on the keyboard, or Enter and Escape. Upon selecting a function, you will be prompted to select station, sensors and data files to complete the actions. A preview panel on the right on the script will be displayed by default to show either the tree of the files in the directory you are browsing, or the content of the data files, depending on context. When at the root of the script, where the main functions can be selected, the preview shows a history logs of all actions taken, which will persist across sessions to allow checking what was done before, in case of any issue with the data.
+
 To be completed.
+
+# Yocto viewer
+
+`Yocto viewer` is an html page (`index.thml` in this repository) which you can open and bookmark to ease navigating through all the plots you may have generated for all your stations using `yoctofzf` and the _R_ pipelines:
+
+![interface](pics/ss20240718-094504.png =800x)
+
+![example plot](ss20240718-094526.png =800x)
 
 # yoctoget
 
@@ -27,9 +42,7 @@ To be completed.
 
 `yoctoget` is a simple `fzf` wrapper written in Bash for the `YSensor` binary from [Yoctopuce's command line API](https://www.yoctopuce.com/EN/libraries.php) (and only that binary, for now) to ease retrieving in batch the data from remote [VirtualHub for Web](https://www.yoctopuce.com/EN/article/nouveau-un-virtualhub-qui-fonctionne-a-travers-le-web) instances. It allows storing URLs to VirtualHub for Web instances already used in the past to quickly select from them upon the next execution. Although not recommended, the user can store their favourite VirtualHub for Web instance password in `secret.conf`.
 
-`yoctoget` can be called from within `yoctofzf`.
-
-`yoctoget` is an unofficial script, unaffiliated to Yoctopuce SARL, and comes with no warranty on your sensors data.
+`yoctoget` can be called from within `yoctofzf`, or as a standalone. `yoctoget` is an unofficial script, unaffiliated to Yoctopuce SARL, and comes with no warranty whatsoever.
 
 ## Dependencies
 
@@ -42,7 +55,7 @@ The `YSensor` binary should be in your `$PATH` (typically `~/.local/bin/` or `/u
 
 ## Usage
 
-Just make the script executable (`chmod +x /path/to/yoctoget`), then run it with `sh /path/to/yoctoget`, `./yoctoget`, or `/path/to/./yoctoget` and follow the instructions.
+The script should already be executable (else, do `chmod +x /path/to/yoctoget`), then run it with `sh /path/to/yoctoget`, `./yoctoget`, `/path/to/./yoctoget`, or using the "Fetch" function in `yoctofzf` above, then follow the instructions.
 
 Downloaded data will be stored in `data/<instancename>/` subdirectories, like so:
 
