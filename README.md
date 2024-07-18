@@ -4,7 +4,7 @@
 
 # yoctofzf
 
-`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through any processing R pipelines (one example is provided to generate plots, but the script accepts new pipelines).
+`yoctofzf` needs a description. It is a Bash script to ease operations on csv files collected from Yoctopuce modules, in particular those connected to a VirtualHub-for-web: fetching, joining csv files from multiple sensors, selecting and renaming columns, replacing values, removing duplicates, viewing files, sending data files through any processing _R_ pipelines (one example is provided to generate plots, but the script accepts new pipelines).
 
 The interactive mode (powered by `fzf`) should be fully functional. The non-interactive mode, with run-time options and arguments to automate batch operations, isn't written yet.
 
