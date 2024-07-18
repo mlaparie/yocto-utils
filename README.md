@@ -28,9 +28,9 @@ To be completed.
 
 `Yocto viewer` is an html page (`index.thml` in this repository) which you can open and bookmark to ease navigating through all the plots you may have generated for all your stations using `yoctofzf` and the _R_ pipelines:
 
-<img src="pics/ss20240718-094504.png" alt="interface" width="800"/>
+<img src="pics/ss20240718-094504.png" alt="interface" width="1200"/>
 
-<img src="ss20240718-094526.png" alt="example plot" width="800"/>
+<img src="pics/ss20240718-094526.png" alt="example plot" width="1200"/>
 
 # yoctoget
 
