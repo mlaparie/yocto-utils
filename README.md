@@ -14,7 +14,7 @@ The interactive mode (powered by `fzf`) should be fully functional. The non-inte
 - `awk`
 - optional: `bat` (beware that on Debian, the `bat` binary is actually called `batcat`, meaning you may need to run `sudo ln -s $(which batcat) /usr/bin/bat` for `yoctofzf` to find it)
 - optional: `r-base` (the name of the package may change depending on the distribution, check `R` and `r-core` too).
-- optional: _R_ packages to be installed within _R_ with `install.packages(c("data.table", "dplyr", "ggplot2", "htmlwidgets", magrittr", "plotly", "viridis", "wesanderson"))`; each of these packages may have their own compiling dependencies; typically the distribution package `libcurl4-openssl-dev` or its variant in your distribution may be required
+- optional: _R_ packages to be installed within _R_ with `install.packages(c("data.table", "dplyr", "ggplot2", "htmlwidgets", "lubridate", "magrittr", "plotly", "viridis", "wesanderson"))`; each of these packages may have their own compiling dependencies; typically the distribution package `libcurl4-openssl-dev` or its variant in your distribution may be required
 
 ## Usage
 
@@ -28,9 +28,9 @@ To be completed.
 
 `Yocto viewer` is an html page (`index.thml` in this repository) which you can open and bookmark to ease navigating through all the plots you may have generated for all your stations using `yoctofzf` and the _R_ pipelines:
 
-![interface](pics/ss20240718-094504.png =800x)
+<img src="pics/ss20240718-094504.png" alt="interface" width="800"/>
 
-![example plot](ss20240718-094526.png =800x)
+<img src="ss20240718-094526.png" alt="example plot" width="800"/>
 
 # yoctoget
 
