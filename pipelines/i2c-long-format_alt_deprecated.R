@@ -20,6 +20,9 @@ suppressMessages(library(wesanderson))
 # suppressMessages(library(tidyverse))
 # suppressMessages(library(UpSetR))
 
+# Supress all warnings
+options(warn=-1)
+
 # Get the arguments passed to the script
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -67,7 +70,7 @@ df <- df %>% mutate(yday = yday(datetime)) %>%
                              "96" = "Tbatt",
                              "97" = "Vc1",
                              "98" = "Vc2",
-                             "99" = "Vbatt"                             ))) %>%
+                             "99" = "Vbatt"))) %>%
     mutate(variable = factor(variable, levels = c("Voltage", "T1", "RH1", "L1",
                                                   "NTC1", "NTC2", "NTC3", "NTC4",
                                                   "NTC5", "NTC6", "NTC7", "NTC8",
@@ -110,7 +113,7 @@ df_rounded <- df_full %>%
 
 # Plots
 # Set output directory
-dir.create(file.path(folder))
+dir.create(file.path(folder), showWarnings = FALSE)
 setwd(folder)
 
 # ggplot

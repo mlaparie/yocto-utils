@@ -125,7 +125,7 @@ select_files_for_joining() {
 	show_actions
 	return
     fi  
-    selected_files=$(find "$folder_path" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --with-nth 3 --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' -m --prompt "▪—▪—□ Join — select files: " --preview 'column -s";" -t < {}' --preview-window right:55%:nowrap  --header "LIST
+    selected_files=$(find "$folder_path" -maxdepth 1 -name "*.csv" | sort | fzf --no-clear -d / --tiebreak=index --with-nth 3 --bind='left:abort,right:accept,ctrl-a:select-all,esc:abort,alt-down:preview-bottom,alt-up:preview-top,ctrl-space:toggle-preview,?:toggle-preview' -m --prompt "▪—▪—□ Join — select files: " --preview 'column -s";" -t < {}' --preview-window right:55%:nowrap  --header "LIST
   Tab: select, C-a: select all
 PREVIEW
   C-space: toggle preview,
