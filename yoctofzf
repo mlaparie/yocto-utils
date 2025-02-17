@@ -95,19 +95,69 @@ select_folder() {
     fi
 }
 
-# Join fetched files based on specified columns
+# # Join fetched files based on specified columns
+# join_files() {
+#     local file1="$1"
+#     local file2="$2"
+#     local col1="$3"
+#     local col2="$4"
+#     local temp_result=$(mktemp)
+    
+#     if ! join -t ";" -1 "$col1" -2 "$col2" "$file1" "$file2" > "$temp_result"; then
+# 	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Join failed between $file1 and $file2.\n#" "$logs"
+# 	rm -f "$temp_result"
+#         return 1
+#     fi
+#     echo "$temp_result"
+# }
+
 join_files() {
     local file1="$1"
     local file2="$2"
     local col1="$3"
     local col2="$4"
     local temp_result=$(mktemp)
-    
-    if ! join -t ";" -1 "$col1" -2 "$col2" "$file1" "$file2" > "$temp_result"; then
-	sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Join failed between $file1 and $file2.\n#" "$logs"
-	rm -f "$temp_result"
-        return 1
+
+    # Convert column numbers to awk indices (awk indices are 1-based)
+    awk_col1="$col1"
+    awk_col2="$col2"
+
+    # Perform the join using awk with error handling
+    if ! awk -F ";" -v col1="$awk_col1" -v col2="$awk_col2" '
+    BEGIN {
+        OFS = ";"
+    }
+    # Read the first file into an array indexed by the key column
+    NR == FNR {
+        key = $col1
+        row = $0
+        file1_data[key] = row
+        next
+    }
+    # For the second file, check if the key exists in the first file
+    {
+        key = $col2
+        if (key in file1_data) {
+            print file1_data[key], $0
+        }
+    }
+    ' "$file1" "$file2" > "$temp_result" 2>/tmp/awk_error.log; then
+        # Print the awk error message and quit the script
+        echo "Error during join operation:"
+        cat /tmp/awk_error.log
+        rm -f "$temp_result" /tmp/awk_error.log
+        exit 1
     fi
+
+    # Check if the result is empty
+    if [ ! -s "$temp_result" ]; then
+        echo "Join failed: no matching rows found between $file1 and $file2."
+        rm -f "$temp_result" /tmp/awk_error.log
+        exit 1
+    fi
+
+    # Cleanup and return the result
+    rm -f /tmp/awk_error.log
     echo "$temp_result"
 }
 
@@ -152,7 +202,7 @@ $folder_path/")
         new_joined_file=$(join_files "$joined_file" "$file" "$col1" "$col2")
         if [ "$new_joined_file" ] && [ -f "$new_joined_file" ]; then
             mv "$new_joined_file" "$joined_file"
-            col1=1
+            col1=2
         else
 	    # Increment logs
 	    sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error joining files.\n#" "$logs"
