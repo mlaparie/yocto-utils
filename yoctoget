@@ -50,16 +50,29 @@ get_module_inventory() {
     local password=$3
 
     # Modify the URL with username, password, and port
-    local modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
-        gsub(/^http:\/\//, "", url);
-        gsub(/\/$/, "", url);
-        sub(/\//, ":80/", url);
-        url = "http://" username ":" password "@" url;
-        print url;
-    }')
+    local modified_url=$(construct_modified_url "$url" "$username" "$password")
     
     # Get the list of available sensors
     YSensor -r "$modified_url" inventory | awk -F '|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}' || fetcherror=1
+}
+
+# Function to construct the modified URL
+construct_modified_url() {
+    local url=$1
+    local username=$2
+    local password=$3
+
+    awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
+        gsub(/^http:\/\//, "", url);
+        gsub(/\/$/, "", url);
+        sub(/\//, ":80/", url);
+        if (username != "" && password != "") {
+            url = "http://" username ":" password "@" url;
+        } else {
+            url = "http://" url;
+        }
+        print url;
+    }'
 }
 
 # Function to download data for a module with a progress bar
@@ -78,13 +91,7 @@ download_data() {
     fi
     
     # Modify the URL with username, password, and port
-    local modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
-        gsub(/^http:\/\//, "", url);
-        gsub(/\/$/, "", url);
-        sub(/\//, ":80/", url);
-        url = "http://" username ":" password "@" url;
-        print url;
-    }')
+    local modified_url=$(construct_modified_url "$url" "$username" "$password")
 
     #local module_name=$(echo "$module" | cut -d ' ' -f 3)
     local full_module_name="$(echo "$module" | awk -F '|' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')$module_suffix"
@@ -93,67 +100,132 @@ download_data() {
     YSensor -c -r "$modified_url" "$module" get_recordedData "$from" 0 | pv -tebr > "$DATA_DIR/$instance/$full_module_name$startdate.csv"
 }
 
+# Parse command-line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --urls|-u)
+                IFS=',' read -r -a url_keywords <<< "$2"
+                shift 2
+                ;;
+            --username|-U)
+                username="$2"
+                shift 2
+                ;;
+            --password|-P)
+                password="$2"
+                shift 2
+                ;;
+            --modules|-m)
+                IFS=',' read -r -a module_keywords <<< "$2"
+                shift 2
+                ;;
+            --from|-f)
+                from="$2"
+                shift 2
+                ;;
+            *)
+                echo "Usage: $0 [--urls keyword1,keyword2,…] [--username username] [--password password] [--modules keyword1,keyword2,…] [--from yyyy-mm-dd|all]" >&2
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Match URLs based on keywords
+match_urls() {
+    local keywords=("$@")
+    local matched_urls=()
+    local urls=$(cat "$URL_FILE" 2>/dev/null)
+
+    for keyword in "${keywords[@]}"; do
+        matched_urls+=($(echo "$urls" | grep -i "$keyword"))
+    done
+
+    echo "${matched_urls[@]}" | tr ' ' '\n' | sort -u
+}
+
+# Match modules based on keywords
+match_modules() {
+    local keywords=("$@")
+    local matched_modules=()
+
+    for keyword in "${keywords[@]}"; do
+        matched_modules+=($(echo "$modules_list" | grep -i "$keyword"))
+    done
+
+    echo "${matched_modules[@]}" | tr ' ' '\n' | sort -u
+}
 
 # Call the function to check the commands
 check_commands
+
+# Parse command-line arguments
+parse_args "$@"
 
 # Start
 printf " ┬ ┬┌─┐┌─┐┌┬┐┌─┐┌─┐┌─┐┌┬┐   A fzf wrapper to get
  └┬┘│ ││   │ │ ││ ┬├┤  │     data from Yoctopuce
   ┴ └─┘└─┘ ┴ └─┘└─┘└─┘ ┴      VirtualHub for Web\n\n"
 
-# Check if the urls file exists
-if [ -f "$URL_FILE" ]; then
-    read -p "Enter an instance URL or press Enter to use URL(s) from urls.txt: " entered_url
+# Check if URLs are provided via command-line arguments
+if [ ${#url_keywords[@]} -eq 0 ]; then
+    # Check if the urls file exists
+    if [ -f "$URL_FILE" ]; then
+        read -p "Enter an instance URL or press Enter to use URL(s) from urls.txt: " entered_url
 
-    if [ -z "$entered_url" ]; then
-        urls=$(cat "$URL_FILE")
-        selected_urls=$(echo "$urls" | fzf --multi --select-1 --bind "ctrl-a:toggle-all" --header="SELECT INSTANCE(S) TO FETCH MODULES FROM…
+        if [ -z "$entered_url" ]; then
+            urls=$(cat "$URL_FILE")
+            selected_urls=$(echo "$urls" | fzf --multi --select-1 --bind "ctrl-a:toggle-all" --header="SELECT INSTANCE(S) TO FETCH MODULES FROM…
 Tab: select line
 C-a: select all
 C-C: quit
 Note: the same credentials will be used for all instances
 
 ")
+        else
+            url="$entered_url"
+            # Add the URL to urls.txt if it's not already present
+            if ! grep -Fxq "$url" "$URL_FILE" >/dev/null 2>&1; then
+                echo "$url" >> "$URL_FILE"
+                echo -e "\033[0;32mNew URL added to urls.txt.\033[0m"
+            fi
+            selected_urls="$url"
+        fi
     else
-        url="$entered_url"
-        # Add the URL to urls.txt if it's not already present
-        if ! grep -Fxq "$url" "$URL_FILE" >/dev/null 2>&1; then
+        read -p "Enter an instance URL: " url
+        if [ -z "$url" ]; then
+            echo -e " \033[0;33murls.txt not found or empty. Please provide an instance URL.\033[0m"
+            exit 1
+        else
             echo "$url" >> "$URL_FILE"
-            echo -e "\033[0;32mNew URL added to urls.txt.\033[0m"
+            echo -e " \033[0;32mURL added to urls.txt.\033[0m"
         fi
         selected_urls="$url"
     fi
 else
-    read -p "Enter an instance URL: " url
-    if [ -z "$url" ]; then
-        echo -e " \033[0;33murls.txt not found or empty. Please provide an instance URL.\033[0m"
-        exit 1
-    else
-        echo "$url" >> "$URL_FILE"
-        echo -e " \033[0;32mURL added to urls.txt.\033[0m"
-    fi
-    selected_urls="$url"
+    selected_urls=$(match_urls "${url_keywords[@]}")
 fi
 
 if [ -z "$selected_urls" ]; then
     exit 0
 else
-    read -p "Enter instance username [default: user]: " username
-    username=${username:-user}
-    get_password
+    # Skip username prompt if -U flag is provided (even if empty)
+    if [ -z "${username+x}" ]; then
+        read -p "Enter instance username [default: user]: " username
+        username=${username:-user}
+    fi
+
+    # Skip password prompt if -P flag is provided (even if empty)
+    if [ -z "${password+x}" ]; then
+        get_password
+    fi
 fi
 
 # Modify the selected URLs with username, password, and port
 modified_urls=""
 while read -r url; do
-    modified_url=$(awk -v url="$url" -v username="$username" -v password="$password" 'BEGIN {
-        gsub(/^http:\/\//, "", url);
-        gsub(/\/$/, "", url);
-        sub(/\//, ":80/", url);
-        url = "http://" username ":" password "@" url;
-        print url;
-    }')
+    modified_url=$(construct_modified_url "$url" "$username" "$password")
     modified_urls+="$modified_url"$'\n'
 done <<< "$selected_urls"
 modified_urls=$(echo "$modified_urls" | head -n -1)
@@ -170,37 +242,57 @@ for url in $selected_urls; do
 done
 
 # Build the list of modules from all selected URLs
-modules=""
+modules_list=""
 echo -e " \033[0;32mFetching available modules from selected instance URL(s)…\033[0m"
 for url in "${urls_array[@]}"; do
     instance=$(echo "$url" | awk -F '/' '{print $NF}')
     instance_modules=$(get_module_inventory "$url" "$username" "$password")
     instance_modules_prefixed=$(echo "$instance_modules" | awk -v prefix="$instance > " '{print prefix $0}')
-    modules+="$instance_modules_prefixed"$'\n'
+    modules_list+="$instance_modules_prefixed"$'\n'
 done
-modules=$(echo "$modules" | head -n -1)
+modules_list=$(echo "$modules_list" | head -n -1)
 
-# Select sensors using fzf
-selected_modules=$(echo "$modules" | fzf --multi  --select-1 --bind "ctrl-a:toggle-all"  --header="SELECT MODULE(S) TO DOWNLOAD DATA FROM…
+# Select sensors using fzf if modules are not provided via command-line arguments
+if [ ${#module_keywords[@]} -eq 0 ]; then
+    selected_modules=$(echo "$modules_list" | fzf --multi  --select-1 --bind "ctrl-a:toggle-all"  --header="SELECT MODULE(S) TO DOWNLOAD DATA FROM…
 Tab: select line
 C-C: quit
 C-a: select all
 
 ")
+else
+    # Prepend instance name to each module when matching by keyword
+    selected_modules=""
+    for keyword in "${module_keywords[@]}"; do
+        selected_modules+=$(echo "$modules_list" | grep -i "$keyword")$'\n'
+    done
+    selected_modules=$(echo "$selected_modules" | head -n -1)
+fi
 
 if [ -z "$selected_modules" ]; then
     exit 0
 else
-    read -p "Download data from YYYY-MM-DD (default: download from the beginning of the series): " from
-    if [[ -n "$from" ]]; then
-	if ! date -d "$from" >/dev/null 2>&1; then
-            echo -e " \033[0;33mInvalid date format. Please provide a valid YYYY-MM-DD date or leave empty.\033[0m"
-            exit 1
-	fi
-
-	from=$(date -d "$from" +%s)
+    if [ -z "$from" ]; then
+        read -p "Download data from YYYY-MM-DD (default: download from the beginning of the series): " from
+        if [[ -n "$from" ]]; then
+            if ! date -d "$from" >/dev/null 2>&1; then
+                echo -e " \033[0;33mInvalid date format. Please provide a valid YYYY-MM-DD date or leave empty.\033[0m"
+                exit 1
+            fi
+            from=$(date -d "$from" +%s)
+        else
+            from=0
+        fi
     else
-	from=0
+        if [[ "$from" == "all" ]]; then
+            from=0
+        else
+            if ! date -d "$from" >/dev/null 2>&1; then
+                echo -e " \033[0;33mInvalid date format. Please provide a valid YYYY-MM-DD date or 'all'.\033[0m"
+                exit 1
+            fi
+            from=$(date -d "$from" +%s)
+        fi
     fi
 fi
 
@@ -210,7 +302,7 @@ echo "$selected_modules" | while IFS= read -r module; do
     module_name=$(echo "$module" | awk -F ' ' '{print $3}')
     module_suffix=$(echo "$module" | awk -F ' ' '{print $4}')
     if [[ -n "$module_suffix" ]]; then
-	module_suffix="_$module_suffix"
+        module_suffix="_$module_suffix"
     fi
     url="${instance_urls[$instance]}"
     download_data "$url" "$username" "$password" "$module_name" "$instance" "$module_suffix" "$from"
