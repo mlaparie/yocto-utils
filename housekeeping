@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+
+# Default values
+devices=$(echo {01..29} | tr ' ' ',')
+modules="nodeid,timestamp,variable,value"
+from="all"
+pipeline="pipelines/i2c-long-format.R"
+output_csv="data/housekeeping_rows.csv"
+skip_fetch=false
+
+# Function to display help
+show_help() {
+    echo "Automatically download data from multiple devices using yoctoget, join"
+    echo "per device, count rows and run R pipeline for routine housekeeping."
+    echo
+    echo "Usage: $0 [OPTIONS]"
+    echo "Options:"
+    echo "  -d, --devices LIST   Comma-separated list of devices keywords (default: 01,02,…,30)"
+    echo "  -d, --modules LIST   Comma-separated list of modules keywords (default: nodeid,timestamp,variable,value)"
+    echo "  -f, --from DATE      Start date for data fetching, YYYY-MM-DD value or all (default: all)"
+    echo "  -p, --pipeline FILE  Pipeline file to run with joined files (default: pipelines/i2c-long-format.R)"
+    echo "  -o, --output FILE    Output CSV file for row counts (default: data/housekeeping_rows.csv)"
+    echo "  -s, --skip-fetch     Skip fetching data from server (only use existing data files)"
+    echo "  -h, --help           Show this help message and exit"
+    exit 0
+}
+
+# Check for miller (mlr) dependency
+if ! command -v mlr &> /dev/null; then
+    echo "Missing dependency: mlr"
+    exit 1
+fi
+
+# Parse command-line argument
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --devices|-d) devices="$2"; shift 2 ;;
+	--modules|-m) modules="$2"; shift 2 ;;
+        --from|-f) from="$2"; shift 2 ;;
+	--pipeline|-p) pipeline="$2"; shift 2 ;;
+        --output|-o) output_csv="$2"; shift 2 ;;
+        --skip-fetch|-s) skip_fetch=true; shift ;;
+        --help|-h) show_help ;;
+        *) echo "Unknown option: $1"; show_help ;;
+    esac
+done
+
+# Convert devices to an array
+devices_array=($(echo "$devices" | tr "," "\n"))
+
+# Download data (unless --skip-fetch is set)
+if [[ "$skip_fetch" == false ]]; then
+    ./yoctoget --username "" --password "" --urls "$devices" --modules "$modules" --from "$from"
+    fetched="true"
+else
+    fetched="false"
+fi
+
+# Create the output CSV file with headers if it doesn't exist
+if [[ ! -f "$output_csv" ]]; then
+    echo "device,date,fetched,from,nodeid_rows,timestamp_rows,variable_rows,value_rows,joined_rows" > "$output_csv"
+fi
+
+# Function to join data files
+join_files() {
+    # Prepare the output file
+    mkdir -p "$device_dir/joined" 2>>/tmp/housekeeping.log
+    today=$(date +%Y-%m-%d)
+    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
+
+    # Join using miller
+    cat "$value_file" | mlr --csvlite --fs ";" --ofs "," \
+        rename 'averageValue,value' then \
+        join -f "$variable_file" -j unixTime then \
+        rename 'averageValue,variable' then \
+        join -f "$timestamp_file" -j unixTime then \
+        rename 'averageValue,timestamp' then \
+        join -f "$nodeid_file" -j unixTime then \
+        rename 'averageValue,nodeid' then \
+        join -f "$value_file" -j unixTime then \
+        cut -f unixTime,nodeid,timestamp,variable,value > "$joined_file"
+}
+
+# Process each device
+for device in "${devices_array[@]}"; do
+    # Define the subfolder for the current device
+    device_dir="data/$device"
+    printf "Joining files for device $device… "
+    
+    # Dynamically find the files based on the keywords in their filenames
+    files_found=1
+    for keyword in nodeid timestamp variable value; do
+        file=$(find "$device_dir" -maxdepth 1 -type f -name "*${keyword}*.csv" 2>>/tmp/housekeeping.log)
+        if [[ -z "$file" ]]; then
+            files_found=0
+            break
+        fi
+        declare "${keyword}_file=$file"
+    done
+    
+    # Skip this device if any required file is missing
+    if [[ "$files_found" -eq 0 ]]; then
+        echo "Skipping device $device due to missing data files."
+        continue
+    else
+        join_files
+        echo "Done."
+    fi
+    
+    # Count the lines in each file
+    nodeid_rows=$(wc -l < "$nodeid_file" 2>>/tmp/housekeeping.log)
+    timestamp_rows=$(wc -l < "$timestamp_file" 2>>/tmp/housekeeping.log)
+    variable_rows=$(wc -l < "$variable_file" 2>>/tmp/housekeeping.log)
+    value_rows=$(wc -l < "$value_file" 2>>/tmp/housekeeping.log)
+    joined_rows=$(wc -l < "$joined_file" 2>>/tmp/housekeeping.log)
+    
+    # Append the counts to the output CSV file
+    echo "$device,$today,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
+done
+
+echo "All devices processed. Rows have been counted and saved to $output_csv."
+
+# Prompt to show the output CSV file in a pager (default to Yes)
+read -p "View the row count for each device? [Y/n]: " view_output
+view_output=${view_output:-Y}
+if [[ "$view_output" == "y" || "$view_output" == "Y" ]]; then
+    if command -v bat &> /dev/null; then
+        bat "$output_csv" --color=always -p | column -s, -t | bat -n
+    else
+        column -s, -t < "$output_csv" | less
+    fi
+fi
+
+# Prompt to run pipelines/i2c-long-format.R on successfully joined files (default to Yes)
+read -p "Run $pipeline on all successfully joined files? [Y/n]: " run_pipeline
+run_pipeline=${run_pipeline:-Y}
+if [[ "$run_pipeline" == "y" || "$run_pipeline" == "Y" ]]; then
+    for device in "${devices_array[@]}"; do
+        device_dir="data/$device"
+        joined_files=("$device_dir/joined/${device}_fetched"*.csv)  # Expand the glob pattern into an array
+        if [[ -f "${joined_files[0]}" ]]; then
+            echo "Running $pipeline for device $device…"
+            for joined_file in "${joined_files[@]}"; do
+                Rscript "$pipeline" "$device_dir/plots" "$joined_file"
+            done
+        else
+            echo "Skipping device $device: no joined file found."
+        fi
+    done
+fi
