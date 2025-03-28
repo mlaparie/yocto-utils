@@ -125,7 +125,7 @@ for device in "${devices_array[@]}"; do
     echo "$device,$now,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
 
     # Make a symlink without the .csv extension for easier preview in a web browser (won't be picked up by the join_files() function due to no extension)
-    ln -s "$joined_file" "$device_dir"/datafile
+    ln -s "joined/${device}_fetched_on_${today}_joined.csv" "$device_dir"/datafile
 done
 
 echo "All devices processed. Rows have been counted and saved to $output_csv."
