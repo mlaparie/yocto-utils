@@ -7,6 +7,8 @@ from="all"
 pipeline="pipelines/i2c-long-format.R"
 output_csv="data/housekeeping_rows.csv"
 skip_fetch=false
+skip_view=false
+run_pipeline=true  # Default to running pipeline
 
 # Function to display help
 show_help() {
@@ -15,13 +17,15 @@ show_help() {
     echo
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  -d, --devices LIST   Comma-separated list of devices keywords (default: 01,02,…,30)"
-    echo "  -d, --modules LIST   Comma-separated list of modules keywords (default: nodeid,timestamp,variable,value)"
-    echo "  -f, --from DATE      Start date for data fetching, YYYY-MM-DD value or all (default: all)"
-    echo "  -p, --pipeline FILE  Pipeline file to run with joined files (default: pipelines/i2c-long-format.R)"
-    echo "  -o, --output FILE    Output CSV file for row counts (default: data/housekeeping_rows.csv)"
-    echo "  -s, --skip-fetch     Skip fetching data from server (only use existing data files)"
-    echo "  -h, --help           Show this help message and exit"
+    echo "  -d,  --devices LIST   Comma-separated list of devices keywords (default: 01,02,…,30)"
+    echo "  -m,  --modules LIST   Comma-separated list of modules keywords (default: nodeid,timestamp,variable,value)"
+    echo "  -f,  --from DATE      Start date for data fetching, YYYY-MM-DD value or all (default: all)"
+    echo "  -p,  --pipeline FILE  Pipeline file to run with joined files (default: pipelines/i2c-long-format.R)"
+    echo "  -o,  --output FILE    Output CSV file for row counts (default: data/housekeeping_rows.csv)"
+    echo "  -s,  --skip-fetch     Skip fetching data from server (only use existing data files)"
+    echo "  -nv, --no-view        Skip viewing the output CSV file"
+    echo "  -np, --no-pipeline    Skip running the R pipeline"
+    echo "  -h,  --help           Show this help message and exit"
     exit 0
 }
 
@@ -35,11 +39,13 @@ fi
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
         --devices|-d) devices="$2"; shift 2 ;;
-	--modules|-m) modules="$2"; shift 2 ;;
+        --modules|-m) modules="$2"; shift 2 ;;
         --from|-f) from="$2"; shift 2 ;;
-	--pipeline|-p) pipeline="$2"; shift 2 ;;
+        --pipeline|-p) pipeline="$2"; run_pipeline=true; shift 2 ;;
         --output|-o) output_csv="$2"; shift 2 ;;
         --skip-fetch|-s) skip_fetch=true; shift ;;
+        --no-view|-nv) skip_view=true; shift ;;
+        --no-pipeline|-np) run_pipeline=false; shift ;;
         --help|-h) show_help ;;
         *) echo "Unknown option: $1"; show_help ;;
     esac
@@ -120,21 +126,22 @@ done
 
 echo "All devices processed. Rows have been counted and saved to $output_csv."
 
-# Prompt to show the output CSV file in a pager (default to Yes)
-read -p "View the row count for each device? [Y/n]: " view_output
-view_output=${view_output:-Y}
-if [[ "$view_output" == "y" || "$view_output" == "Y" ]]; then
-    if command -v bat &> /dev/null; then
-        bat "$output_csv" --color=always -p | column -s, -t | bat -n
-    else
-        column -s, -t < "$output_csv" | less
+# View output CSV file (unless --skip-view is set)
+if [[ "$skip_view" == false ]]; then
+    read -p "View the row count for each device? [Y/n]: " view_output
+    view_output=${view_output:-Y}
+    if [[ "$view_output" == "y" || "$view_output" == "Y" ]]; then
+        if command -v bat &> /dev/null; then
+            bat "$output_csv" --color=always -p | column -s, -t | bat -n
+        else
+            column -s, -t < "$output_csv" | less
+        fi
     fi
 fi
 
-# Prompt to run pipelines/i2c-long-format.R on successfully joined files (default to Yes)
-read -p "Run $pipeline on all successfully joined files? [Y/n]: " run_pipeline
-run_pipeline=${run_pipeline:-Y}
-if [[ "$run_pipeline" == "y" || "$run_pipeline" == "Y" ]]; then
+# Run pipeline if enabled
+if [[ "$run_pipeline" == true ]]; then
+    echo "Running $pipeline on all successfully joined files..."
     for device in "${devices_array[@]}"; do
         device_dir="data/$device"
         joined_files=("$device_dir/joined/${device}_fetched"*.csv)  # Expand the glob pattern into an array
@@ -147,4 +154,6 @@ if [[ "$run_pipeline" == "y" || "$run_pipeline" == "Y" ]]; then
             echo "Skipping device $device: no joined file found."
         fi
     done
+else
+    echo "Skipping pipeline execution as requested."
 fi
