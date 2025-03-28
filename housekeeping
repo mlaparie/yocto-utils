@@ -71,7 +71,7 @@ fi
 join_files() {
     # Prepare the output file
     mkdir -p "$device_dir/joined" 2>>/tmp/housekeeping.log
-    now=$(date +"%Y-%m-%d %H:%m")
+    now=$(date +"%Y-%m-%d %H:%M")
     joined_file="$device_dir/joined/${device}_fetched_on_${now}_joined.csv"
 
     # Join using miller
