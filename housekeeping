@@ -64,15 +64,15 @@ fi
 
 # Create the output CSV file with headers if it doesn't exist
 if [[ ! -f "$output_csv" ]]; then
-    echo "device,date,fetched,from,nodeid_rows,timestamp_rows,variable_rows,value_rows,joined_rows" > "$output_csv"
+    echo "device,datetime,fetched,from,nodeid_rows,timestamp_rows,variable_rows,value_rows,joined_rows" > "$output_csv"
 fi
 
 # Function to join data files
 join_files() {
     # Prepare the output file
     mkdir -p "$device_dir/joined" 2>>/tmp/housekeeping.log
-    today=$(date +%Y-%m-%d)
-    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
+    now=$(date +"%Y-%m-%d %H:%m")
+    joined_file="$device_dir/joined/${device}_fetched_on_${now}_joined.csv"
 
     # Join using miller
     cat "$value_file" | mlr --csvlite --fs ";" --ofs "," \
@@ -121,7 +121,7 @@ for device in "${devices_array[@]}"; do
     joined_rows=$(wc -l < "$joined_file" 2>>/tmp/housekeeping.log)
     
     # Append the counts to the output CSV file
-    echo "$device,$today,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
+    echo "$device,$now,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
 done
 
 echo "All devices processed. Rows have been counted and saved to $output_csv."
