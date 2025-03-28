@@ -71,9 +71,9 @@ fi
 join_files() {
     # Prepare the output file
     mkdir -p "$device_dir/joined" 2>>/tmp/housekeeping.log
-    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
     now=$(date +"%Y-%m-%d %H:%M")
     today=$(date +"%Y-%m-%d")
+    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
 
     # Join using miller
     cat "$value_file" | mlr --csvlite --fs ";" --ofs "," \
@@ -125,7 +125,6 @@ for device in "${devices_array[@]}"; do
     echo "$device,$now,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
 
     # Make a symlink without the .csv extension for easier preview in a web browser (won't be picked up by the join_files() function due to no extension)
-    today=$(date +"%Y-%m-%d")
     ln -s "joined/${device}_fetched_on_${today}_joined.csv" "$device_dir"/datafile
 done
 
