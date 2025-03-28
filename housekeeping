@@ -31,7 +31,7 @@ show_help() {
 
 # Check for miller (mlr) dependency
 if ! command -v mlr &> /dev/null; then
-    echo "Missing dependency: mlr"
+    echo "Missing dependency: mlr (miller package)"
     exit 1
 fi
 
@@ -71,9 +71,9 @@ fi
 join_files() {
     # Prepare the output file
     mkdir -p "$device_dir/joined" 2>>/tmp/housekeeping.log
+    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
     now=$(date +"%Y-%m-%d %H:%M")
     today=$(date +"%Y-%m-%d")
-    joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
 
     # Join using miller
     cat "$value_file" | mlr --csvlite --fs ";" --ofs "," \
@@ -125,7 +125,7 @@ for device in "${devices_array[@]}"; do
     echo "$device,$now,$fetched,$from,$nodeid_rows,$timestamp_rows,$variable_rows,$value_rows,$joined_rows" >> "$output_csv"
 
     # Make a symlink without the .csv extension for easier preview in a web browser (won't be picked up by the join_files() function due to no extension)
-    ln -s "$output_csv" "$device_dir"/datafile
+    ln -s "$joined_file" "$device_dir"/datafile
 done
 
 echo "All devices processed. Rows have been counted and saved to $output_csv."
@@ -143,19 +143,16 @@ if [[ "$skip_view" == false ]]; then
     fi
 fi
 
-# Run pipeline if enabled
+# Run pipeline if not disabled
 if [[ "$run_pipeline" == true ]]; then
     echo "Running $pipeline on all files successfully joined this run…"
     for device in "${devices_array[@]}"; do
         device_dir="data/$device"
 	joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
-#        joined_files=("$device_dir/joined/${device}_fetched"*.csv)  # Expand the glob pattern into an array
         if [[ -f "$joined_file" ]]; then
             echo "Running $pipeline for device $device…"
-            #for joined_file in "${joined_files[@]}"; do
-                Rscript "$pipeline" "$device_dir/plots" "$joined_file"
-            #done
-        else
+            Rscript "$pipeline" "$device_dir/plots" "$joined_file"
+	else
             echo "Skipping device $device: no joined file found."
         fi
     done
