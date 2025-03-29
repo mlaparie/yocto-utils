@@ -77,19 +77,22 @@ create_plot <- function(data, ytitle, showlegend) {
           color = ~node,
           opacity = 0.7,
           type = 'scatter', mode = 'markers',
-          text = ~paste0("Node: ", node, "<br>", variable, ": ", value, 
+          text = ~paste0("N", node, "<br>", variable, " = ", value, 
                        "<br>", datetime),
           hoverinfo = 'text',
-          showlegend = showlegend,
-          legendgroup = ~node) %>%
-    layout(legend = list(title = list(text = "<b>Node</b>")),
+          legendgroup = ~node,
+          showlegend = showlegend) %>%
+    layout(plot_bgcolor='#e5ecf6',
+           margin = list(t = 10),
+           legend = list(title = list(text = "<b>Node</b>"), y = 0.5),
            yaxis = list(title = ytitle),
-           xaxis = list(title = "", range = c(default_start, default_end))) %>%
+           xaxis = list(title = "",
+                        range = c(default_start, default_end))) %>%
     config(displayModeBar = TRUE, scrollZoom = FALSE,
            modeBarButtonsToAdd = list("toggleSpikelines", "toImage"))
 }
 
-# Create all plots with showlegend=FALSE
+# Create all plots with showlegend=FALSE except the first
 plot_list$Temperature <- create_plot(df %>% filter(type == "Temperature"), "Air temperature (°C)", TRUE)
 plot_list$NTC <- create_plot(df %>% filter(type == "NTC"), "NTC (°C)", FALSE)
 plot_list$Voltage <- create_plot(df %>% filter(type == "Voltage"), "Voltage (V)", FALSE)
@@ -99,23 +102,23 @@ plot_list$Humidity <- create_plot(df %>% filter(type == "Humidity"), "Relative h
 # Combine all plots vertically with the legend at the top
 final_plot <- subplot(
   plot_list$Temperature,
-  plot_list$NTC,
-  plot_list$Humidity,
   plot_list$Light,
   plot_list$Voltage,
-  nrows = 5,
+  plot_list$Humidity,
+  plot_list$NTC,
+  nrows = 2,
+ # widths = c(0.7),
   shareX = TRUE,
   titleY = TRUE
 ) %>%
 layout(
-  margin = list(t = 50),
   xaxis = list(
     rangeselector = list(
       buttons = list(
         list(count = 1, label = "1d", step = "day", stepmode = "backward"),
         list(count = 7, label = "1w", step = "day", stepmode = "backward"),
         list(count = 14, label = "2w", step = "day", stepmode = "backward"),
-        list(count = 30, label = "1m", step = "month", stepmode = "backward"),
+        list(count = 1, label = "1m", step = "month", stepmode = "backward"),
         list(step = "all")
       )
     ),
