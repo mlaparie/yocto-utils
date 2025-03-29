@@ -7,7 +7,6 @@
 # Environment with minimal dependencies
 suppressMessages(library(data.table))
 suppressMessages(library(dplyr))
-#suppressMessages(library(ggplot2))
 suppressMessages(library(plotly))
 suppressMessages(library(lubridate))
 
@@ -27,10 +26,10 @@ colnames(df) <- c("datetime", "node", "second", "variable", "value")
 
 # Variable mutations
 df <- df %>% 
-  mutate(datetime = as.POSIXct(unixTime)) %>%
+  mutate(datetime = as.POSIXct(datetime)) %>%
   mutate(yday = yday(datetime)) %>%
   mutate(variable.orig = variable) %>%
-  mutate(node = as.factor(paste0("Node ", nodeid))) %>%
+  mutate(node = as.factor(node)) %>%
   mutate(variable = as.factor(recode(as.character(variable),
                          "1" = "Voltage",
                          "2" = "T1",
@@ -69,152 +68,67 @@ df <- df %>%
 default_start <- max(df$datetime, na.rm = TRUE) - days(7)
 default_end <- max(df$datetime, na.rm = TRUE)
 
-# Create a color palette that works well with node and variable combinations
-# Using plotly's default color sequence which works well
-get_colors <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
-# Create plots for each type in the desired order
+# Create individual plots with consistent colors and showlegend=FALSE
 plot_list <- list()
 
-# Temperature plot
-temp_data <- df %>% filter(type == "Temperature")
-if(nrow(temp_data) > 0) {
-  plot_list$Temperature <- plot_ly(temp_data, x = ~datetime, y = ~value, 
-                                  color = ~interaction(node, variable, sep = " - "),
-                                  colors = get_colors(length(unique(interaction(temp_data$node, temp_data$variable)))),
-                                  type = 'scatter', mode = 'lines+markers',
-                                  text = ~paste("Node:", node, "<br>Variable:", variable, "<br>Value:", value, 
-                                               "<br>Time:", datetime),
-                                  hoverinfo = 'text') %>%
-    layout(yaxis = list(title = "Temperature (°C)"),
-           xaxis = list(title = "", range = c(default_start, default_end)),
-           legend = list(title = list(text = "<b>Node - Variable</b>"))) %>%
-    config(displayModeBar = TRUE, scrollZoom = TRUE,
-           modeBarButtonsToAdd = list("toggleSpikelines", "drawline", "drawopenpath", "drawclosedpath", 
-                                     "drawcircle", "drawrect", "eraseshape", "toImage"))
+# Function to create plots with consistent settings
+create_plot <- function(data, ytitle, showlegend) {
+  plot_ly(data, x = ~datetime, y = ~value, 
+          color = ~node,
+          opacity = 0.7,
+          type = 'scatter', mode = 'markers',
+          text = ~paste0("Node: ", node, "<br>", variable, ": ", value, 
+                       "<br>", datetime),
+          hoverinfo = 'text',
+          showlegend = showlegend,
+          legendgroup = ~node) %>%
+    layout(legend = list(title = list(text = "<b>Node</b>")),
+           yaxis = list(title = ytitle),
+           xaxis = list(title = "", range = c(default_start, default_end))) %>%
+    config(displayModeBar = TRUE, scrollZoom = FALSE,
+           modeBarButtonsToAdd = list("toggleSpikelines", "toImage"))
 }
 
-# NTC plot
-ntc_data <- df %>% filter(type == "NTC")
-if(nrow(ntc_data) > 0) {
-  plot_list$NTC <- plot_ly(ntc_data, x = ~datetime, y = ~value, 
-                          color = ~interaction(node, variable, sep = " - "),
-                          colors = get_colors(length(unique(interaction(ntc_data$node, ntc_data$variable)))),
-                          type = 'scatter', mode = 'lines+markers',
-                          text = ~paste("Node:", node, "<br>Variable:", variable, "<br>Value:", value, 
-                                       "<br>Time:", datetime),
-                          hoverinfo = 'text') %>%
-    layout(yaxis = list(title = "NTC Resistance (Ω)"),
-           xaxis = list(title = "", range = c(default_start, default_end)),
-           legend = list(title = list(text = "<b>Node - Variable</b>"))) %>%
-    config(displayModeBar = TRUE, scrollZoom = TRUE,
-           modeBarButtonsToAdd = list("toggleSpikelines", "drawline", "drawopenpath", "drawclosedpath", 
-                                     "drawcircle", "drawrect", "eraseshape", "toImage"))
-}
+# Create all plots with showlegend=FALSE
+plot_list$Temperature <- create_plot(df %>% filter(type == "Temperature"), "Air temperature (°C)", TRUE)
+plot_list$NTC <- create_plot(df %>% filter(type == "NTC"), "NTC (°C)", FALSE)
+plot_list$Voltage <- create_plot(df %>% filter(type == "Voltage"), "Voltage (V)", FALSE)
+plot_list$Light <- create_plot(df %>% filter(type == "Light"), "Light (klux)", FALSE)
+plot_list$Humidity <- create_plot(df %>% filter(type == "Humidity"), "Relative humidity (%)", FALSE)
 
-# Voltage plot
-volt_data <- df %>% filter(type == "Voltage")
-if(nrow(volt_data) > 0) {
-  plot_list$Voltage <- plot_ly(volt_data, x = ~datetime, y = ~value, 
-                              color = ~interaction(node, variable, sep = " - "),
-                              colors = get_colors(length(unique(interaction(volt_data$node, volt_data$variable)))),
-                              type = 'scatter', mode = 'lines+markers',
-                              text = ~paste("Node:", node, "<br>Variable:", variable, "<br>Value:", value, 
-                                           "<br>Time:", datetime),
-                              hoverinfo = 'text') %>%
-    layout(yaxis = list(title = "Voltage (V)"),
-           xaxis = list(title = "", range = c(default_start, default_end)),
-           legend = list(title = list(text = "<b>Node - Variable</b>"))) %>%
-    config(displayModeBar = TRUE, scrollZoom = TRUE,
-           modeBarButtonsToAdd = list("toggleSpikelines", "drawline", "drawopenpath", "drawclosedpath", 
-                                     "drawcircle", "drawrect", "eraseshape", "toImage"))
-}
-
-# Light plot
-light_data <- df %>% filter(type == "Light")
-if(nrow(light_data) > 0) {
-  plot_list$Light <- plot_ly(light_data, x = ~datetime, y = ~value, 
-                            color = ~interaction(node, variable, sep = " - "),
-                            colors = get_colors(length(unique(interaction(light_data$node, light_data$variable)))),
-                            type = 'scatter', mode = 'lines+markers',
-                            text = ~paste("Node:", node, "<br>Variable:", variable, "<br>Value:", value, 
-                                         "<br>Time:", datetime),
-                            hoverinfo = 'text') %>%
-    layout(yaxis = list(title = "Light Intensity"),
-           xaxis = list(title = "", range = c(default_start, default_end)),
-           legend = list(title = list(text = "<b>Node - Variable</b>"))) %>%
-    config(displayModeBar = TRUE, scrollZoom = TRUE,
-           modeBarButtonsToAdd = list("toggleSpikelines", "drawline", "drawopenpath", "drawclosedpath", 
-                                     "drawcircle", "drawrect", "eraseshape", "toImage"))
-}
-
-# Humidity plot
-humidity_data <- df %>% filter(type == "Humidity")
-if(nrow(humidity_data) > 0) {
-  plot_list$Humidity <- plot_ly(humidity_data, x = ~datetime, y = ~value, 
-                               color = ~interaction(node, variable, sep = " - "),
-                               colors = get_colors(length(unique(interaction(humidity_data$node, humidity_data$variable)))),
-                               type = 'scatter', mode = 'lines+markers',
-                               text = ~paste("Node:", node, "<br>Variable:", variable, "<br>Value:", value, 
-                                            "<br>Time:", datetime),
-                               hoverinfo = 'text') %>%
-    layout(yaxis = list(title = "Humidity (%)"),
-           xaxis = list(title = "", range = c(default_start, default_end)),
-           legend = list(title = list(text = "<b>Node - Variable</b>"))) %>%
-    config(displayModeBar = TRUE, scrollZoom = TRUE,
-           modeBarButtonsToAdd = list("toggleSpikelines", "drawline", "drawopenpath", "drawclosedpath", 
-                                     "drawcircle", "drawrect", "eraseshape", "toImage"))
-}
-
-# Create subplot in desired order: Temperature - NTC - Voltage - Light - Humidity
-subplot_list <- list()
-subplot_list[[1]] <- plot_list$Temperature
-subplot_list[[2]] <- plot_list$NTC
-subplot_list[[3]] <- plot_list$Voltage
-subplot_list[[4]] <- plot_list$Light
-subplot_list[[5]] <- plot_list$Humidity
-
-# Calculate number of rows needed (2 rows)
-nrows <- 2
-
-# Create final plot with synchronized x-axes
-final_plot <- subplot(subplot_list, nrows = nrows, shareX = TRUE, titleX = FALSE) %>%
-  layout(
-    plot_bgcolor = 'white',
-    xaxis = list(
-      rangeselector = list(
-        buttons = list(
-          list(
-            count = 1,
-            label = "1d",
-            step = "day",
-            stepmode = "backward"),
-          list(
-            count = 7,
-            label = "1w",
-            step = "day",
-            stepmode = "backward"),
-          list(
-            count = 14,
-            label = "2w",
-            step = "day",
-            stepmode = "backward"),
-          list(
-            count = 30,
-            label = "1m",
-            step = "day",
-            stepmode = "backward"),
-          list(step = "all"))
+# Combine all plots vertically with the legend at the top
+final_plot <- subplot(
+  plot_list$Temperature,
+  plot_list$NTC,
+  plot_list$Humidity,
+  plot_list$Light,
+  plot_list$Voltage,
+  nrows = 5,
+  shareX = TRUE,
+  titleY = TRUE
+) %>%
+layout(
+  margin = list(t = 50),
+  xaxis = list(
+    rangeselector = list(
+      buttons = list(
+        list(count = 1, label = "1d", step = "day", stepmode = "backward"),
+        list(count = 7, label = "1w", step = "day", stepmode = "backward"),
+        list(count = 14, label = "2w", step = "day", stepmode = "backward"),
+        list(count = 30, label = "1m", step = "month", stepmode = "backward"),
+        list(step = "all")
+      )
     ),
     hovermode = "x unified"
   )
+)
 
 # Set output directory
 dir.create(file.path(folder), showWarnings = FALSE)
 setwd(folder)
 
-# Save the plot
-htmlwidgets::saveWidget(final_plot, "housekeeping.html", selfcontained = TRUE)
+# Save with full height
+htmlwidgets::saveWidget(final_plot, "housekeeping.html", selfcontained = TRUE,
+                       title = "Sensor Data Dashboard",
+                       libdir = "lib",
+                       background = "white")
