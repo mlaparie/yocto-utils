@@ -151,7 +151,7 @@ if [[ "$run_pipeline" == true ]]; then
 	joined_file="$device_dir/joined/${device}_fetched_on_${today}_joined.csv"
         if [[ -f "$joined_file" ]]; then
             echo "Running $pipeline for device $device…"
-            Rscript "$pipeline" "$device_dir/plots" "$joined_file"
+            ./"$pipeline" "$device_dir/plots" "$joined_file"
 	else
             echo "Skipping device $device: no joined file found."
         fi

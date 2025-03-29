@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # This script prepares the data collected from modular I2C
 # sensor stations with a Yocto-I2C reporting the data in long
 # format (variable and value columns); see corresponding
