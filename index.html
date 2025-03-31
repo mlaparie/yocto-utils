@@ -179,7 +179,7 @@
             const plot = plotType || document.getElementById('plot').value;
             const iframe = document.getElementById('plotFrame');
 	    const newSrc = plot === 'dashboard'
-	      ? '../../../dashboard.html'
+	      ? '../../../pipelines/web/dashboard.html'
 	      : plot === 'control-panel'
 	      ? `http://pheno.pclim.net/vh4w/${device}`
 	      : `data/${device}/plots/${plot}.html`;
