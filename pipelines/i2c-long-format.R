@@ -231,40 +231,35 @@ timeseries <- subplot(plots, nrows = length(types), shareX = TRUE, shareY = FALS
             rangeselector = list(
                 buttons = list(
                     list(
-                        count = 4,
-                        label = "4 h",
-                        step = "hour",
-                        stepmode = "backward"),
-                    list(
                         count = 1,
-                        label = "1 d",
+                        label = "1d",
                         step = "day",
                         stepmode = "backward"),
                     list(
                         count = 2,
-                        label = "2 d",
+                        label = "2d",
                         step = "day",
                         stepmode = "backward"),
                     list(
                         count = 1,
-                        label = "1 w",
+                        label = "1w",
                         step = "week",
                         stepmode = "backward"),
                     list(
                         count = 2,
-                        label = "2 w",
+                        label = "2w",
                         step = "week",
+                        stepmode = "backward"),
+                    list(
+                        count = 1,
+                        label = "1m",
+                        step = "month",
                         stepmode = "backward"),
                     list(
                         count = 3,
-                        label = "3 mo",
+                        label = "3m",
                         step = "month",
                         stepmode = "backward"),
-                    ## list(
-                    ##     count = 1,
-                    ##     label = "YTD",
-                    ##     step = "year",
-                    ##     stepmode = "todate"),
                     list(step = "all"))),
             rangeslider = list(type = "date",
                                bgcolor = "#EBEBEB",

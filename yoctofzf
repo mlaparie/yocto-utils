@@ -644,7 +644,7 @@ pipelines/
 	# Execute pipeline
 	plot_folder="$folder_path"/plots
 	mkdir -p "$plot_folder"
-	Rscript $selected_pipeline "$plot_folder" "$selected_file" || error=1
+	    ./"$selected_pipeline" "$plot_folder" "$selected_file" || error=1
 	
 	if [ $error -eq 1 ]; then
             sed -i "1s#^#$(date '+%Y-%m-%d %H:%M:%S') - Error: failed to execute i2c-long-format.R, try running it manually.\n#" "$logs"

@@ -175,11 +175,20 @@
 
         function updatePlot(plotType = null) {
             const device = document.getElementById('device').value;
+	    localStorage.setItem('device', device);
             const plot = plotType || document.getElementById('plot').value;
             const iframe = document.getElementById('plotFrame');
-            const newSrc = plot === 'control-panel' ? `http://pheno.pclim.net/vh4w/${device}` : `data/${device}/plots/${plot}.html`;
+	    const newSrc = plot === 'dashboard'
+	      ? '../../../dashboard.html'
+	      : plot === 'control-panel'
+	      ? `http://pheno.pclim.net/vh4w/${device}`
+	      : `data/${device}/plots/${plot}.html`;
 
-            if (currentPlotIndex === -1 || plotHistory[currentPlotIndex].src !== newSrc) {
+            if (
+                currentPlotIndex === -1 ||
+            	plotHistory[currentPlotIndex].src !== newSrc ||
+            	plotHistory[currentPlotIndex].device !== device
+            ) {
                 plotHistory.push({ device, plot, src: newSrc });
                 currentPlotIndex = plotHistory.length - 1;
                 updateHistory();
@@ -353,18 +362,21 @@
                     toggleInputOverlay();
                     break;
                 case '1':
-                    updatePlot('summary');
+                    updatePlot('dashboard');
                     break;
                 case '2':
-                    updatePlot('overview');
+                    updatePlot('summary');
                     break;
                 case '3':
-                    updatePlot('missing');
+                    updatePlot('overview');
                     break;
                 case '4':
-                    updatePlot('timeseries');
+                    updatePlot('missing');
                     break;
                 case '5':
+                    updatePlot('timeseries');
+                    break;
+                case '6':
                     updatePlot('control-panel');
                     break;
             }
@@ -573,11 +585,12 @@
         <div class="input-panel">
             <label for="plot">Window:</label>
             <select id="plot" onchange="updatePlot()">
-                <option value="summary">1. summary</option>
-                <option value="overview">2. overview</option>
-                <option value="missing">3. missing</option>
-                <option value="timeseries">4. timeseries</option>
-                <option value="control-panel">5. control-panel</option>
+              <option value="dashboard">1. dashboard</option>
+	      <option value="summary">2. summary</option>
+                <option value="overview">3. overview</option>
+                <option value="missing">4. missing</option>
+                <option value="timeseries">5. timeseries</option>
+                <option value="control-panel">6. control-panel</option>
             </select>
         </div>
 
