@@ -103,12 +103,18 @@
           if ([15,16,17].includes(variable)) suffix = 'b';
           else if ([18,19,20].includes(variable)) suffix = 'c';
 
-          let type;
-          if (['Voltage', 'Vc1', 'Vc2', 'Vbatt'].includes(variableName)) type = 'Voltage';
-          else if (['T1', 'T2', 'T3', 'Tbatt'].includes(variableName)) type = 'Temperature';
-          else if (['RH1', 'RH2', 'RH3'].includes(variableName)) type = 'Humidity';
-          else if (['L1', 'L2', 'L3'].includes(variableName)) type = 'Light';
-          else type = 'NTC';
+	  let type, unit;
+	  if (['Voltage', 'Vc1', 'Vc2', 'Vbatt'].includes(variableName)) {
+	    type = 'Voltage'; unit = '(V)';
+	  } else if (['T1', 'T2', 'T3', 'Tbatt'].includes(variableName)) {
+	    type = 'Temperature'; unit = '(°C)';
+	  } else if (['RH1', 'RH2', 'RH3'].includes(variableName)) {
+	    type = 'Humidity'; unit = '(%)';
+	  } else if (['L1', 'L2', 'L3'].includes(variableName)) {
+	    type = 'Light'; unit = '(lux)';
+	  } else {
+	    type = 'NTC'; unit = '(Ω)';
+	  }
 
           const dateObj = new Date(datetime);
           return {
@@ -116,7 +122,8 @@
             node: `N${node}${suffix}`,
             variable: variableName,
             value: value,
-            type: type
+            type: type,
+	    unit: unit
           };
         }).filter(item => !isNaN(item.datetime.getTime()));
 
@@ -198,7 +205,7 @@
 
         layouts[yaxisKey] = {
           anchor: `x${subplotId}`,
-          title: type,
+	  title: `${type} ${typeData[0]?.unit || ''}`,
           domain: [domainStart, domainEnd],
           titlefont: { size: 12, family: 'monospace' },
           tickfont: { size: 10, family: 'monospace' },
@@ -233,6 +240,9 @@
         font: { family: 'monospace' },
         ...layouts
       };
+
+      // Sort traces by node name descending (only affects legend order)
+      traces.sort((a, b) => b.name.localeCompare(a.name));
 
       Plotly.react('chart', traces, layout, { displaylogo: false }).then(() => {
         const graphDiv = document.getElementById('chart');
