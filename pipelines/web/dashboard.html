@@ -25,7 +25,7 @@
     }
     .status {
       position: absolute;
-      right: 41.5%;
+      right: 32%;
       top: 18px;
       font-size: 12px;
       text-align: center;
@@ -46,7 +46,7 @@
       font-family: monospace;
     }
     .modebar {
-      top: -25px !important;
+      top: -22px !important;
     }
   </style>
 </head>
@@ -85,12 +85,10 @@
         lastModified = new Date(response.headers.get('Last-Modified')).getTime();
 
         const data = text.trim().split('\n').map(line => {
-          const parts = line.split(',');
-          const datetime = parts[0];
-          const node = parseInt(parts[1]);
-          const second = parseInt(parts[2]);
-          const variable = parseInt(parts[3]);
-          const value = parseFloat(parts[4]);
+          const [datetime, nodeStr, second, variableStr, valueStr] = line.split(',');
+          const node = parseInt(nodeStr);
+          const variable = parseInt(variableStr);
+          const value = parseFloat(valueStr);
 
           const variableNames = {
             '1': 'Voltage', '2': 'T1', '3': 'RH1', '4': 'L1', '5': 'NTC1',
@@ -101,7 +99,6 @@
           };
 
           const variableName = variableNames[variable] || variable;
-
           let suffix = '';
           if ([15,16,17].includes(variable)) suffix = 'b';
           else if ([18,19,20].includes(variable)) suffix = 'c';
@@ -124,12 +121,10 @@
         }).filter(item => !isNaN(item.datetime.getTime()));
 
         const uniqueNodes = [...new Set(data.map(item => item.node))];
-        const sortedNodes = [...uniqueNodes].sort((a, b) => {
-          return parseInt(a.substring(1)) - parseInt(b.substring(1));
-        });
+        const sortedNodes = [...uniqueNodes].sort((a, b) => parseInt(a.substring(1)) - parseInt(b.substring(1)));
 
         createPlot(data, sortedNodes);
-        document.getElementById('status').textContent = `${data.length - 1} records loaded (${new Date().toLocaleTimeString()})`;
+        document.getElementById('status').textContent = `${data.length} records loaded (${new Date().toLocaleTimeString()})`;
       } catch (error) {
         console.error('Error loading data:', error);
         document.getElementById('status').textContent = 'Error loading data. This page is not standalone, open it from index.html and a web server.';
@@ -140,9 +135,7 @@
       try {
         const response = await fetch(DATA_FILE, { method: 'HEAD' });
         const currentModified = new Date(response.headers.get('Last-Modified')).getTime();
-        if (currentModified > lastModified) {
-          loadData();
-        }
+        if (currentModified > lastModified) loadData();
       } catch (error) {
         console.error('Error checking for updates:', error);
       }
@@ -168,7 +161,7 @@
         const yaxisKey = `yaxis${subplotId}`;
 
         const nodeVars = [...new Set(typeData.map(d => `${d.node}-${d.variable}`))];
-        nodeVars.forEach((nv) => {
+        nodeVars.forEach(nv => {
           const [node, variable] = nv.split('-');
           const nodeVarData = typeData.filter(d => d.node === node && d.variable === variable);
           if (nodeVarData.length > 0) {
@@ -181,7 +174,6 @@
               mode: 'markers',
               type: 'scatter',
               marker: { size: 8, opacity: 0.7, color: color },
-              line: { opacity: 0.7 },
               hoverlabel: {
                 bgcolor: `rgba(${hexToRgb(color)},0.7)`,
                 font: { family: 'monospace', size: 9, color: 'black' },
@@ -198,7 +190,6 @@
 
         layouts[xaxisKey] = {
           anchor: `y${subplotId}`,
-          title: i === typeOrder.length - 1 ? 'Time' : '',
           showticklabels: i === typeOrder.length - 1,
           type: 'date',
           domain: [0, 1],
@@ -236,95 +227,114 @@
           traceorder: 'normal',
           font: { family: 'monospace' }
         },
-        plot_bgcolor: '#e5ecf6',
+        plot_bgcolor: localStorage.getItem('plot-bg') || '#e5ecf6',
         height: 1200,
-        margin: { t: 0, l: 50, r: 30, b: 10 },
+        margin: { t: 0, l: 50, r: 30, b: 30 },
         font: { family: 'monospace' },
         ...layouts
       };
 
-      if (!plot) {
-        plot = Plotly.newPlot('chart', traces, layout).then(() => {
-          const graphDiv = document.getElementById('chart');
-          graphDiv.on('plotly_relayout', function(eventdata) {
-            if (eventdata['xaxis.range[0]'] || eventdata['xaxis.range[1]']) {
-              const xaxis = graphDiv.layout.xaxis2;
-              const range = [xaxis.range[0], xaxis.range[1]];
-              const update = {};
-              for (let i = 3; i <= subplotCount; i++) {
-                update[`xaxis${i}.range[0]`] = range[0];
-                update[`xaxis${i}.range[1]`] = range[1];
-              }
-              Plotly.relayout(graphDiv, update);
+      Plotly.react('chart', traces, layout, { displaylogo: false }).then(() => {
+        const graphDiv = document.getElementById('chart');
+
+        graphDiv.on('plotly_relayout', function(eventdata) {
+          if (eventdata['xaxis.range[0]'] || eventdata['xaxis.range[1]']) {
+            const xaxis = graphDiv.layout.xaxis2;
+            const range = [xaxis.range[0], xaxis.range[1]];
+            const update = {};
+            for (let i = 3; i <= subplotCount; i++) {
+              update[`xaxis${i}.range[0]`] = range[0];
+              update[`xaxis${i}.range[1]`] = range[1];
             }
-          });
-
-          document.getElementById('plot-controls').innerHTML = `
-            <select id="mode-selector">
-              <option value="markers">Markers</option>
-              <option value="lines+markers">Lines</option>
-              <option value="smoothed">Smoothed</option>
-            </select>
-            <button onclick="setRange('1d')">1d</button>
-            <button onclick="setRange('2d')">2d</button>
-            <button onclick="setRange('1w')">1w</button>
-            <button onclick="setRange('2w')">2w</button>
-            <button onclick="setRange('1m')">1m</button>
-            <button onclick="setRange('3m')">3m</button>
-            <button onclick="setRange('all')">All</button>
-          `;
-
-          document.getElementById('mode-selector').addEventListener('change', (e) => {
-            const val = e.target.value;
-            if (val === 'smoothed') {
-              Plotly.restyle('chart', {
-                mode: 'lines+markers',
-                line: { shape: 'spline', opacity: 0.7 },
-                opacity: 0.7
-              });
-            } else if (val === 'lines+markers') {
-              Plotly.restyle('chart', {
-                mode: 'lines+markers',
-                line: { opacity: 0.7 },
-                opacity: 0.7
-              });
-            } else {
-              Plotly.restyle('chart', {
-                mode: val,
-                opacity: 0.7
-              });
-            }
-          });
-
-	window.setRange = (label) => {
-  	  const graphDiv = document.getElementById('chart');
-	  const now = new Date();
-	  let start;
-
-	  // reset all button backgrounds
-	  document.querySelectorAll('#plot-controls button').forEach(btn => {
-	  btn.style.backgroundColor = '';
-	});
-	  // highlight selected button
-	const activeBtn = document.querySelector(`button[onclick="setRange('${label}')"]`);
-	  if (activeBtn) activeBtn.style.backgroundColor = '#ccc';
-	  switch (label) {
-	  case '1d': start = new Date(now - 1 * 864e5); break;
-	  case '2d': start = new Date(now - 2 * 864e5); break;
-	  case '1w': start = new Date(now - 7 * 864e5); break;
-	  case '2w': start = new Date(now - 14 * 864e5); break;
-	  case '1m': start = new Date(now.setMonth(now.getMonth() - 1)); break;
-	  case '3m': start = new Date(now.setMonth(now.getMonth() - 3)); break;
-	  case 'all': Plotly.relayout(graphDiv, { 'xaxis2.autorange': true }); return;
-	}
-	Plotly.relayout(graphDiv, {
-  	  'xaxis2.range': [start.toISOString(), new Date().toISOString()]
-	});
-	};
+            Plotly.relayout(graphDiv, update);
+          }
         });
-      } else {
-        Plotly.react('chart', traces, layout);
-      }
+
+        document.getElementById('plot-controls').innerHTML = `
+          <select id="mode-selector">
+            <option value="markers">Markers</option>
+            <option value="lines+markers">Lines</option>
+            <option value="spline">Splines</option>
+          </select>
+          <button onclick="toggleBgColor()">Background</button>
+          <button onclick="setRange('1d')">1d</button>
+          <button onclick="setRange('2d')">2d</button>
+          <button onclick="setRange('1w')">1w</button>
+          <button onclick="setRange('2w')">2w</button>
+          <button onclick="setRange('1m')">1m</button>
+          <button onclick="setRange('3m')">3m</button>
+          <button onclick="setRange('all')">All</button>
+	  <button onclick="resetSettings()">Reset</button>
+        `;
+
+window.toggleBgColor = () => {
+  const chartDiv = document.getElementById('chart');
+  const btn = document.querySelector('button[onclick="toggleBgColor()"]');
+  const current = chartDiv.layout?.plot_bgcolor || '#e5ecf6';
+  const newColor = current === '#fafafa' ? '#e5ecf6' : '#fafafa';
+
+  localStorage.setItem('plot-bg', newColor);
+  Plotly.relayout(chartDiv, { plot_bgcolor: newColor });
+
+  if (btn) btn.style.backgroundColor = newColor;
+};
+
+	window.resetSettings = () => {
+          localStorage.removeItem('plot-mode');
+          localStorage.removeItem('plot-range');
+          localStorage.removeItem('plot-bg');
+          location.reload();
+	};
+
+        document.getElementById('mode-selector').addEventListener('change', (e) => {
+          const val = e.target.value;
+          localStorage.setItem('plot-mode', val);
+          const update = val === 'spline'
+            ? { mode: 'lines+markers', line: { shape: 'spline', opacity: 0.8 }, opacity: 0.8 }
+            : { mode: val, opacity: 0.8 };
+          Plotly.restyle('chart', update);
+        });
+
+        window.setRange = (label) => {
+          localStorage.setItem('plot-range', label);
+          const graphDiv = document.getElementById('chart');
+          const now = new Date();
+          let start;
+          document.querySelectorAll('#plot-controls button').forEach(btn => btn.style.backgroundColor = '');
+          const activeBtn = document.querySelector(`button[onclick="setRange('${label}')"]`);
+          if (activeBtn) activeBtn.style.backgroundColor = '#ccc';
+
+          switch (label) {
+            case '1d': start = new Date(now - 1 * 864e5); break;
+            case '2d': start = new Date(now - 2 * 864e5); break;
+            case '1w': start = new Date(now - 7 * 864e5); break;
+            case '2w': start = new Date(now - 14 * 864e5); break;
+            case '1m': start = new Date(now.setMonth(now.getMonth() - 1)); break;
+            case '3m': start = new Date(now.setMonth(now.getMonth() - 3)); break;
+            case 'all': Plotly.relayout(graphDiv, { 'xaxis2.autorange': true }); return;
+          }
+
+          Plotly.relayout(graphDiv, {
+            'xaxis2.range': [start.toISOString(), new Date().toISOString()]
+          });
+        };
+
+        // Restore last used settings
+        const savedMode = localStorage.getItem('plot-mode');
+        if (savedMode) {
+          document.getElementById('mode-selector').value = savedMode;
+          document.getElementById('mode-selector').dispatchEvent(new Event('change'));
+        }
+
+        const savedRange = localStorage.getItem('plot-range');
+        if (savedRange) setRange(savedRange);
+        else setRange('1w');
+
+        const savedBg = localStorage.getItem('plot-bg');
+        if (savedBg) Plotly.relayout('chart', { plot_bgcolor: savedBg });
+  const bgBtn = document.querySelector('button[onclick="toggleBgColor()"]');
+  if (bgBtn) bgBtn.style.backgroundColor = savedBg;
+      });
     }
   </script>
 </body>
