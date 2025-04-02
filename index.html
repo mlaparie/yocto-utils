@@ -35,6 +35,7 @@
             padding: 5px 10px;
             cursor: pointer;
             z-index: 1001;
+            -webkit-tap-highlight-color: transparent;
         }
         #inputOverlay {
             position: absolute;
@@ -64,6 +65,12 @@
             font-size: 10px;
             cursor: pointer;
             margin-top: 20px;
+        }
+        #helpToggle span {
+            -webkit-tap-highlight-color: transparent;
+        }
+        #helpToggle span:active {
+            opacity: 0.7;
         }
         .input-panel {
             display: flex;
@@ -106,6 +113,10 @@
             padding: 2px 5px;
             cursor: pointer;
             transition: opacity 0.3s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .history-item:active {
+            opacity: 0.7;
         }
         .current-history {
             font-weight: bold;
@@ -124,6 +135,10 @@
             user-select: none;
             opacity: 0;
             transition: opacity 0.3s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .history-arrow:active {
+            opacity: 0.7 !important;
         }
         .history-arrow.visible {
             opacity: 1;
@@ -156,6 +171,7 @@
             position: absolute;
             top: 10px;
             right: 10px;
+            -webkit-tap-highlight-color: transparent;
         }
         #noPlotMessage {
             position: absolute;
@@ -168,41 +184,46 @@
             display: block;
             z-index: 1500;
         }
+        a {
+            -webkit-tap-highlight-color: transparent;
+        }
     </style>
     <script>
         let plotHistory = [];
         let currentPlotIndex = -1;
 
-        function updatePlot(plotType = null) {
-            const device = document.getElementById('device').value;
+	function updatePlot(plotType = null) {
+	    const device = document.getElementById('device').value;
 	    localStorage.setItem('device', device);
-            const plot = plotType || document.getElementById('plot').value;
-            const iframe = document.getElementById('plotFrame');
+	    const plot = plotType || document.getElementById('plot').value;
+	    const iframe = document.getElementById('plotFrame');
+	    
+	    // Store device in URL for dashboard
 	    const newSrc = plot === 'dashboard'
-	      ? '../../../pipelines/web/dashboard.html'
-	      : plot === 'control-panel'
-	      ? `http://pheno.pclim.net/vh4w/${device}`
-	      : `data/${device}/plots/${plot}.html`;
+		  ? `../../../pipelines/web/dashboard.html?device=${device}`
+		  : plot === 'control-panel'
+		  ? `http://pheno.pclim.net/vh4w/${device}`
+		  : `data/${device}/plots/${plot}.html`;
 
-            if (
-                currentPlotIndex === -1 ||
-            	plotHistory[currentPlotIndex].src !== newSrc ||
-            	plotHistory[currentPlotIndex].device !== device
-            ) {
-                plotHistory.push({ device, plot, src: newSrc });
-                currentPlotIndex = plotHistory.length - 1;
-                updateHistory();
-                updateFullHistory();
-            }
+	    if (
+		currentPlotIndex === -1 ||
+		    plotHistory[currentPlotIndex].src !== newSrc ||
+		    plotHistory[currentPlotIndex].device !== device
+	    ) {
+		plotHistory.push({ device, plot, src: newSrc });
+		currentPlotIndex = plotHistory.length - 1;
+		updateHistory();
+		updateFullHistory();
+	    }
 
-            iframe.src = newSrc;
-            iframe.style.backgroundColor = plot === 'control-panel' ? 'white' : '';
-            iframe.style.display = 'block';
-            document.getElementById('noPlotMessage').style.display = 'none';
-            if (plotType) {
-                document.getElementById('plot').value = plotType;
-            }
-        }
+	    iframe.src = newSrc;
+	    iframe.style.backgroundColor = plot === 'control-panel' ? 'white' : '';
+	    iframe.style.display = 'block';
+	    document.getElementById('noPlotMessage').style.display = 'none';
+	    if (plotType) {
+		document.getElementById('plot').value = plotType;
+	    }
+	}
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -229,25 +250,61 @@
             }
         }
 
-        function updateFullHistory() {
-            const fullHistoryPanel = document.getElementById('fullHistory');
-            fullHistoryPanel.innerHTML = '<h3>History</h3><div id="closeFullHistory" onclick="toggleFullHistory()">✖</div>';
+	function updateFullHistory() {
+	    const fullHistoryPanel = document.getElementById('fullHistory');
+	    fullHistoryPanel.innerHTML = '<h3>History</h3><div id="closeFullHistory" onclick="toggleFullHistory()">✖</div>';
+            
+            // Add touch event for close button
+	    document.getElementById('closeFullHistory').addEventListener('touchstart', function(e) {
+		e.preventDefault();
+		toggleFullHistory();
+	    });
+
             plotHistory.forEach((item, index) => {
                 const historyItem = document.createElement('div');
                 historyItem.className = 'history-item ' + (index === currentPlotIndex ? 'current-history' : '');
                 historyItem.textContent = `${item.device} - ${item.plot}`;
-                historyItem.onclick = () => {
-                    currentPlotIndex = index;
-                    document.getElementById('device').value = item.device;
-                    document.getElementById('plot').value = item.plot;
-                    const iframe = document.getElementById('plotFrame');
-                    iframe.src = item.src;
-                    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
-                    iframe.style.display = 'block';
-                    document.getElementById('noPlotMessage').style.display = 'none';
-                    updateHistory();
-                    updateFullHistory();
-                };
+                
+                // Add touch event for history items
+		historyItem.addEventListener('touchstart', function(e) {
+		    e.preventDefault();
+		    currentPlotIndex = index;
+		    document.getElementById('device').value = item.device;
+		    document.getElementById('plot').value = item.plot;
+		    const iframe = document.getElementById('plotFrame');
+		    
+		    // Update localStorage before loading dashboard
+		    if (item.plot === 'dashboard') {
+			localStorage.setItem('device', item.device);
+		    }
+		    
+		    iframe.src = item.src;
+		    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
+		    iframe.style.display = 'block';
+		    document.getElementById('noPlotMessage').style.display = 'none';
+		    updateHistory();
+		    updateFullHistory();
+		});
+
+		historyItem.onclick = function() {
+		    currentPlotIndex = index;
+		    document.getElementById('device').value = item.device;
+		    document.getElementById('plot').value = item.plot;
+		    const iframe = document.getElementById('plotFrame');
+		    
+		    // Update localStorage before loading dashboard
+		    if (item.plot === 'dashboard') {
+			localStorage.setItem('device', item.device);
+		    }
+		    
+		    iframe.src = item.src;
+		    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
+		    iframe.style.display = 'block';
+		    document.getElementById('noPlotMessage').style.display = 'none';
+		    updateHistory();
+		    updateFullHistory();
+		};
+                
                 fullHistoryPanel.appendChild(historyItem);
             });
         }
@@ -352,10 +409,10 @@
                 case '?':
                     toggleHelp();
                     break;
-	        case 'd':
+                case 'd':
                     window.location.href = 'data/';
                     break;
-	        case 'c':
+                case 'c':
                     window.location.href = 'data/housekeeping_rows';
                     break;
                 case 'Enter':
@@ -462,10 +519,38 @@
                 const historyItem = document.createElement('div');
                 historyItem.className = 'history-item ' + (index === currentPlotIndex ? 'current-history' : (Math.abs(index - currentPlotIndex) === 1 ? 'non-current-history' : 'further-history'));
                 historyItem.textContent = `${item.device}-${item.plot.charAt(0)}`;
-                historyItem.onclick = () => {
+                
+                // Add touch event for history items
+                historyItem.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
                     currentPlotIndex = index;
                     document.getElementById('device').value = item.device;
                     document.getElementById('plot').value = item.plot;
+                    
+                    // Update localStorage before loading dashboard
+                    if (item.plot === 'dashboard') {
+                        localStorage.setItem('device', item.device);
+                    }
+                    
+                    const iframe = document.getElementById('plotFrame');
+                    iframe.src = item.src;
+                    iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
+                    iframe.style.display = 'block';
+                    document.getElementById('noPlotMessage').style.display = 'none';
+                    updateHistory();
+                    updateFullHistory();
+                });
+                
+                historyItem.onclick = function() {
+                    currentPlotIndex = index;
+                    document.getElementById('device').value = item.device;
+                    document.getElementById('plot').value = item.plot;
+                    
+                    // Update localStorage before loading dashboard
+                    if (item.plot === 'dashboard') {
+                        localStorage.setItem('device', item.device);
+                    }
+                    
                     const iframe = document.getElementById('plotFrame');
                     iframe.src = item.src;
                     iframe.style.backgroundColor = item.plot === 'control-panel' ? 'white' : '';
@@ -474,6 +559,7 @@
                     updateHistory();
                     updateFullHistory();
                 };
+                
                 historyContainer.appendChild(historyItem);
             });
 
@@ -533,6 +619,32 @@
                 }
             });
 
+            // Add touch events for buttons
+            document.getElementById('toggleBtn').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                toggleMainPanel();
+            });
+            document.getElementById('sidebarToggleBtn').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                toggleMainPanel();
+            });
+
+            // Add touch event for help toggle
+            document.getElementById('toggleHelpBtn').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                toggleHelp();
+            });
+
+            // Add touch events for history arrows
+            document.querySelector('.history-arrow.left').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                panHistory(-3);
+            });
+            document.querySelector('.history-arrow.right').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                panHistory(3);
+            });
+
             // Ensure help is hidden by default
             document.getElementById('help').style.display = 'none';
 
@@ -551,46 +663,48 @@
         <div class="input-panel">
             <label for="device">Device:</label>
             <select id="device" onchange="updatePlot()">
-	        <option value="01">01</option>
-	        <option value="02">02</option>
+                <option value="" disabled selected>Select a device</option>
+                <option value="01">01</option>
+                <option value="02">02</option>
                 <option value="03">03</option>
-		<option value="04">04</option>
-		<option value="05">05</option>
-		<option value="06">06</option>
-		<option value="07">07</option>
-		<option value="08">08</option>
-		<option value="09">09</option>
-		<option value="10">10</option>
-		<option value="11">11</option>
-		<option value="12">12</option>
-		<option value="13">13</option>
-		<option value="14">14</option>
-		<option value="15">15</option>
-		<option value="16">16</option>
-		<option value="17">17</option>
-		<option value="18">18</option>
-		<option value="19">19</option>
-		<option value="20">20</option>
-		<option value="21">21</option>
-		<option value="22">22</option>
-		<option value="23">23</option>
-		<option value="24">24</option>
-		<option value="25">25</option>
-		<option value="26">26</option>
-		<option value="27">27</option>
-		<option value="28">28</option>
-		<option value="29">29</option>
+                <option value="04">04</option>
+                <option value="05">05</option>
+                <option value="06">06</option>
+                <option value="07">07</option>
+                <option value="08">08</option>
+                <option value="09">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18</option>
+                <option value="19">19</option>
+                <option value="20">20</option>
+                <option value="21">21</option>
+                <option value="22">22</option>
+                <option value="23">23</option>
+                <option value="24">24</option>
+                <option value="25">25</option>
+                <option value="26">26</option>
+                <option value="27">27</option>
+                <option value="28">28</option>
+                <option value="29">29</option>
+                <option value="30">29</option>
             </select>
         </div>
         <div class="input-panel">
             <label for="plot">Window:</label>
             <select id="plot" onchange="updatePlot()">
               <option value="dashboard">1. dashboard</option>
-	      <option value="summary">2. summary</option>
-                <option value="overview">3. overview</option>
-                <option value="missing">4. missing</option>
-                <option value="timeseries">5. timeseries</option>
-                <option value="control-panel">6. control-panel</option>
+              <option value="summary">2. summary</option>
+              <option value="overview">3. overview</option>
+              <option value="missing">4. missing</option>
+              <option value="timeseries">5. timeseries</option>
+              <option value="control-panel">6. control-panel</option>
             </select>
         </div>
 
@@ -602,10 +716,10 @@
 
         <hr>
 
-        <div id="helpToggle">
-	  <span onclick="toggleHelp()"><b>?:</b> Toggle help,</span>
-          <span><a href="data/" style="color: inherit; text-decoration: none;"><b>d:</b> View data,</a></span>
-          <span><a href="housekeeping_rows" style="color: inherit; text-decoration: none;"><b>c:</b> Count rows</a></span>
+	<div id="helpToggle">
+	  <span id="toggleHelpBtn" onclick="toggleHelp()"><b>?:</b> Toggle help,</span>
+	  <span><a href="data/" style="color: inherit; text-decoration: none;"><b>d:</b> View data,</a></span>
+	  <span><a href="data/housekeeping_rows" style="color: inherit; text-decoration: none;"><b>c:</b> Count rows</a></span>
 	</div>
         <div id="help">
             <p><b>p/n:</b> Prev/next device available</p>

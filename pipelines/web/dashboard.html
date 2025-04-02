@@ -1,351 +1,406 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
-  <style>
-    body {
-      font-family: monospace;
-      margin: 0;
-      padding: 10px;
-      background-color: #f5f5f5;
-    }
-    .dashboard {
-      max-width: 1100px;
-      margin: 0 auto;
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      position: relative;
-    }
-    #chart {
-      height: 1200px;
-      width: 100%;
-    }
-    .status {
-      position: absolute;
-      right: 32%;
-      top: 18px;
-      font-size: 12px;
-      text-align: center;
-      color: #666;
-      font-style: italic;
-      margin-bottom: 4px;
-    }
-    #plot-controls select,
-    #plot-controls button {
-      position: relative;
-      top: 0px;
-      left: 35px;
-      z-index: 10;
-      padding: 3px 3px;
-      margin-right: 1px;
-      border-radius: 5px;
-      font-size: 11px;
-      font-family: monospace;
-    }
-    .modebar {
-      top: -22px !important;
-    }
-  </style>
-</head>
-<body>
-  <div class="dashboard">
-    <div class="status" id="status">Loading data...</div>
-    <div id="plot-controls"></div>
-    <div id="chart"></div>
-  </div>
+  <head>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
+    <style>
+      body {
+	  font-family: monospace;
+	  margin: 0;
+	  padding: 10px;
+	  background-color: #f5f5f5;
+      }
 
-  <script>
-    const device = localStorage.getItem('device');
-    const DATA_FILE = `../../data/${device}/datafile`;
-    const UPDATE_INTERVAL = 10000;
-    const DateTime = luxon.DateTime;
+      .dashboard {
+	  max-width: 1100px;
+	  margin: 0 auto;
+	  background: white;
+	  padding: 10px;
+	  border-radius: 8px;
+	  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+	  position: relative;
+      }
 
-    const wesColors = [
-      '#FAD7A0', '#F5CBA7', '#F9E79F', '#ABEBC6', '#AED6F1',
-      '#D2B4DE', '#F1948A', '#A3E4D7', '#F5B7B1', '#D5F5E3',
-      '#C39BD3', '#7FB3D5', '#F8C471', '#F0B27A', '#82E0AA'
-    ];
+      #chart {
+	  height: 1200px;
+	  width: 100%;
+      }
 
-    let lastModified = 0;
-    let plot;
+      /* control bar wrapper */
+      #control-bar {
+	  display: flex;
+	  flex-wrap: wrap;
+	  gap: 12px;
+	  align-items: center;
+	  margin-bottom: 8px;
+	  padding: 0 35px;
+      }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      loadData();
-      setInterval(checkForUpdates, UPDATE_INTERVAL);
-    });
+      /* controls row */
+      #plot-controls {
+	  display: flex;
+	  flex-wrap: wrap;
+	  gap: 6px;
+	  justify-content: flex-start;
+      }
 
-    async function loadData() {
+      /* buttons + selects styling */
+      #plot-controls select,
+      #plot-controls button {
+	  padding: 3px 6px;
+	  font-size: 10px;
+	  border: none;
+	  border-radius: 11px;
+	  font-family: monospace;
+      }
+
+      /* modebar styling */
+      .modebar-container {
+	  display: flex !important;
+	  opacity: 1 !important;
+	  margin: 0 !important;
+	  right: 110px !important;
+	  top: 20px !important;
+      }
+
+      /* status styling */
+      .status {
+	  font-size: 10px;
+	  line-height: 0;
+	  color: #666;
+	  font-style: italic;
+	  white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard">
+      <div id="control-bar">
+	<div id="plot-controls"></div>
+	<div class="status" id="status">Loading data...</div>
+	<div class="modebar-container"></div>
+      </div>
+      <div id="chart-container">
+	<div id="chart"></div>
+      </div>
+    </div>
+    <script>
       try {
-        document.getElementById('status').textContent = 'Loading data...';
-        const response = await fetch(DATA_FILE);
-        const text = await response.text();
-        lastModified = new Date(response.headers.get('Last-Modified')).getTime();
+	  const device = localStorage.getItem('device');
+	  if (!device || typeof device !== 'string') {
+	      throw new Error('Invalid or missing device');
+	  }
+      } catch (e) {
+	  console.warn('LocalStorage reset due to error:', e);
+	  localStorage.clear();
+	  location.reload();
+      }
+      const device = localStorage.getItem('device');
+      const DATA_FILE = `../../data/${device}/datafile`;
+      const UPDATE_INTERVAL = 10000;
+      const DateTime = luxon.DateTime;
 
-        const data = text.trim().split('\n').map(line => {
-          const [datetime, nodeStr, second, variableStr, valueStr] = line.split(',');
-          const node = parseInt(nodeStr);
-          const variable = parseInt(variableStr);
-          const value = parseFloat(valueStr);
+      const wesColors = [
+	  '#FAD7A0', '#F5CBA7', '#F9E79F', '#ABEBC6', '#AED6F1',
+	  '#D2B4DE', '#F1948A', '#A3E4D7', '#F5B7B1', '#D5F5E3',
+	  '#C39BD3', '#7FB3D5', '#F8C471', '#F0B27A', '#82E0AA'
+      ];
 
-          const variableNames = {
-            '1': 'Voltage', '2': 'T1', '3': 'RH1', '4': 'L1', '5': 'NTC1',
-            '6': 'NTC2', '7': 'NTC3', '8': 'NTC4', '9': 'NTC5', '10': 'NTC6',
-            '11': 'NTC7', '12': 'NTC8', '13': 'NTC9', '14': 'NTC10',
-            '15': 'T2', '16': 'RH2', '17': 'L2', '18': 'T3', '19': 'RH3',
-            '20': 'L3', '96': 'Tbatt', '97': 'Vc1', '98': 'Vc2', '99': 'Vbatt'
-          };
+      let lastModified = 0;
+      let plot;
 
-          const variableName = variableNames[variable] || variable;
-          let suffix = '';
-          if ([15,16,17].includes(variable)) suffix = 'b';
-          else if ([18,19,20].includes(variable)) suffix = 'c';
+      document.addEventListener('DOMContentLoaded', () => {
+	  loadData();
+	  setInterval(checkForUpdates, UPDATE_INTERVAL);
+      });
 
-	  let type, unit;
-	  if (['Voltage', 'Vc1', 'Vc2', 'Vbatt'].includes(variableName)) {
-	    type = 'Voltage'; unit = '(V)';
-	  } else if (['T1', 'T2', 'T3', 'Tbatt'].includes(variableName)) {
-	    type = 'Temperature'; unit = '(°C)';
-	  } else if (['RH1', 'RH2', 'RH3'].includes(variableName)) {
-	    type = 'Humidity'; unit = '(%)';
-	  } else if (['L1', 'L2', 'L3'].includes(variableName)) {
-	    type = 'Light'; unit = '(lux)';
-	  } else {
-	    type = 'NTC'; unit = '(Ω)';
+      async function loadData() {
+	  try {
+              document.getElementById('status').textContent = `Loading data/${device}/datafile`;
+              const response = await fetch(DATA_FILE);
+              const text = await response.text();
+              lastModified = new Date(response.headers.get('Last-Modified')).getTime();
+
+              const data = text.trim().split('\n').map(line => {
+		  const [datetime, nodeStr, second, variableStr, valueStr] = line.split(',');
+		  const node = parseInt(nodeStr);
+		  const variable = parseInt(variableStr);
+		  const value = parseFloat(valueStr);
+
+		  const variableNames = {
+		      '1': 'Voltage', '2': 'T1', '3': 'RH1', '4': 'L1', '5': 'NTC1',
+		      '6': 'NTC2', '7': 'NTC3', '8': 'NTC4', '9': 'NTC5', '10': 'NTC6',
+		      '11': 'NTC7', '12': 'NTC8', '13': 'NTC9', '14': 'NTC10',
+		      '15': 'T2', '16': 'RH2', '17': 'L2', '18': 'T3', '19': 'RH3',
+		      '20': 'L3', '96': 'Tbatt', '97': 'Vc1', '98': 'Vc2', '99': 'Vbatt'
+		  };
+
+		  const variableName = variableNames[variable] || variable;
+		  let suffix = '';
+		  if ([15,16,17].includes(variable)) suffix = 'b';
+		  else if ([18,19,20].includes(variable)) suffix = 'c';
+
+		  let type, unit;
+		  if (['Voltage', 'Vc1', 'Vc2', 'Vbatt'].includes(variableName)) {
+		      type = 'Voltage'; unit = '(V)';
+		  } else if (['T1', 'T2', 'T3', 'Tbatt'].includes(variableName)) {
+		      type = 'Temperature'; unit = '(°C)';
+		  } else if (['RH1', 'RH2', 'RH3'].includes(variableName)) {
+		      type = 'Humidity'; unit = '(%)';
+		  } else if (['L1', 'L2', 'L3'].includes(variableName)) {
+		      type = 'Light'; unit = '(klux)';
+		  } else {
+		      type = 'NTC'; unit = '(°C)';
+		  }
+
+		  const dateObj = new Date(datetime);
+		  return {
+		      datetime: dateObj,
+		      node: `N${node}${suffix}`,
+		      variable: variableName,
+		      value: value,
+		      type: type,
+		      unit: unit
+		  };
+              }).filter(item => !isNaN(item.datetime.getTime()));
+
+              const uniqueNodes = [...new Set(data.map(item => item.node))];
+              const sortedNodes = [...uniqueNodes].sort((a, b) => parseInt(a.substring(1)) - parseInt(b.substring(1)));
+
+              createPlot(data, sortedNodes);
+              document.getElementById('status').textContent = `${data.length} records loaded (${new Date().toLocaleTimeString()})`;
+	  } catch (error) {
+              console.error('Error loading data:', error);
+              document.getElementById('status').textContent = `Error loading data: ${error.message} Make sure this page is called from index.html and a web server.`;
+	  }
+      }
+
+      async function checkForUpdates() {
+	  try {
+              const response = await fetch(DATA_FILE, { method: 'HEAD' });
+              const currentModified = new Date(response.headers.get('Last-Modified')).getTime();
+              if (currentModified > lastModified) loadData();
+	  } catch (error) {
+              console.error('Error checking for updates:', error);
+	  }
+      }
+
+      function createPlot(data, sortedNodes) {
+	  const typeOrder = ['Temperature', 'NTC', 'Humidity', 'Light', 'Voltage'];
+	  const subplotCount = typeOrder.length + 1;
+	  const traces = [];
+	  const layouts = {};
+	  const subplotHeight = 0.93 / (subplotCount - 1);
+	  const spacing = 0.07 / (subplotCount - 1);
+
+	  layouts['xaxis1'] = { domain: [0, 1], visible: false };
+	  layouts['yaxis1'] = { domain: [0.999, 1], visible: false };
+
+	  typeOrder.forEach((type, i) => {
+              const typeData = data.filter(d => d.type === type);
+              const subplotId = i + 2;
+              const domainStart = 1 - ((i + 1) * (subplotHeight + spacing));
+              const domainEnd = domainStart + subplotHeight;
+              const xaxisKey = `xaxis${subplotId}`;
+              const yaxisKey = `yaxis${subplotId}`;
+
+              const nodeVars = [...new Set(typeData.map(d => `${d.node}-${d.variable}`))];
+              nodeVars.forEach(nv => {
+		  const [node, variable] = nv.split('-');
+		  const nodeVarData = typeData.filter(d => d.node === node && d.variable === variable);
+		  if (nodeVarData.length > 0) {
+		      const color = wesColors[sortedNodes.indexOf(node) % wesColors.length];
+		      traces.push({
+			  x: nodeVarData.map(d => d.datetime),
+			  y: nodeVarData.map(d => d.value),
+			  text: nodeVarData.map(d => `${node}<br>${d.variable} = ${d.value.toFixed(2)}<br>${d.datetime.toLocaleString('en-GB')}`),
+			  name: node,
+			  mode: 'markers',
+			  type: 'scatter',
+			  marker: { size: 8, opacity: 0.7, color: color },
+			  hoverlabel: {
+			      bgcolor: `rgba(${hexToRgb(color)},0.7)`,
+			      font: { family: 'monospace', size: 9, color: 'black' },
+			      bordercolor: color
+			  },
+			  hoverinfo: 'text',
+			  legendgroup: `${node}-${variable}`,
+			  showlegend: i === 0,
+			  xaxis: `x${subplotId}`,
+			  yaxis: `y${subplotId}`
+		      });
+		  }
+              });
+
+              layouts[xaxisKey] = {
+		  anchor: `y${subplotId}`,
+		  showticklabels: i === typeOrder.length - 1,
+		  type: 'date',
+		  domain: [0, 1],
+		  matches: 'x2'
+              };
+
+              layouts[yaxisKey] = {
+		  anchor: `x${subplotId}`,
+		  title: `${type} ${typeData[0]?.unit || ''}`,
+		  domain: [domainStart, domainEnd],
+		  titlefont: { size: 12, family: 'monospace' },
+		  tickfont: { size: 10, family: 'monospace' },
+		  automargin: true
+              };
+	  });
+
+	  function hexToRgb(hex) {
+              const r = parseInt(hex.slice(1, 3), 16);
+              const g = parseInt(hex.slice(3, 5), 16);
+              const b = parseInt(hex.slice(5, 7), 16);
+              return `${r}, ${g}, ${b}`;
 	  }
 
-          const dateObj = new Date(datetime);
-          return {
-            datetime: dateObj,
-            node: `N${node}${suffix}`,
-            variable: variableName,
-            value: value,
-            type: type,
-	    unit: unit
-          };
-        }).filter(item => !isNaN(item.datetime.getTime()));
-
-        const uniqueNodes = [...new Set(data.map(item => item.node))];
-        const sortedNodes = [...uniqueNodes].sort((a, b) => parseInt(a.substring(1)) - parseInt(b.substring(1)));
-
-        createPlot(data, sortedNodes);
-        document.getElementById('status').textContent = `${data.length} records loaded (${new Date().toLocaleTimeString()})`;
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('status').textContent = 'Error loading data. This page is not standalone, open it from index.html and a web server.';
-      }
-    }
-
-    async function checkForUpdates() {
-      try {
-        const response = await fetch(DATA_FILE, { method: 'HEAD' });
-        const currentModified = new Date(response.headers.get('Last-Modified')).getTime();
-        if (currentModified > lastModified) loadData();
-      } catch (error) {
-        console.error('Error checking for updates:', error);
-      }
-    }
-
-    function createPlot(data, sortedNodes) {
-      const typeOrder = ['Temperature', 'NTC', 'Humidity', 'Light', 'Voltage'];
-      const subplotCount = typeOrder.length + 1;
-      const traces = [];
-      const layouts = {};
-      const subplotHeight = 0.93 / (subplotCount - 1);
-      const spacing = 0.07 / (subplotCount - 1);
-
-      layouts['xaxis1'] = { domain: [0, 1], visible: false };
-      layouts['yaxis1'] = { domain: [0.999, 1], visible: false };
-
-      typeOrder.forEach((type, i) => {
-        const typeData = data.filter(d => d.type === type);
-        const subplotId = i + 2;
-        const domainStart = 1 - ((i + 1) * (subplotHeight + spacing));
-        const domainEnd = domainStart + subplotHeight;
-        const xaxisKey = `xaxis${subplotId}`;
-        const yaxisKey = `yaxis${subplotId}`;
-
-        const nodeVars = [...new Set(typeData.map(d => `${d.node}-${d.variable}`))];
-        nodeVars.forEach(nv => {
-          const [node, variable] = nv.split('-');
-          const nodeVarData = typeData.filter(d => d.node === node && d.variable === variable);
-          if (nodeVarData.length > 0) {
-            const color = wesColors[sortedNodes.indexOf(node) % wesColors.length];
-            traces.push({
-              x: nodeVarData.map(d => d.datetime),
-              y: nodeVarData.map(d => d.value),
-              text: nodeVarData.map(d => `${node}<br>${d.variable} = ${d.value.toFixed(2)}<br>${d.datetime.toLocaleString('en-GB')}`),
-              name: node,
-              mode: 'markers',
-              type: 'scatter',
-              marker: { size: 8, opacity: 0.7, color: color },
-              hoverlabel: {
-                bgcolor: `rgba(${hexToRgb(color)},0.7)`,
-                font: { family: 'monospace', size: 9, color: 'black' },
-                bordercolor: color
+	  const layout = {
+              grid: {
+		  rows: subplotCount,
+		  pattern: 'independent',
+		  roworder: 'top to bottom'
               },
-              hoverinfo: 'text',
-              legendgroup: `${node}-${variable}`,
-              showlegend: i === 0,
-              xaxis: `x${subplotId}`,
-              yaxis: `y${subplotId}`
-            });
-          }
-        });
+              showlegend: true,
+              legend: {
+		  title: { text: '<b>Node</b>', font: { family: 'monospace' } },
+		  y: 0.95,
+		  yanchor: 'top',
+		  traceorder: 'normal',
+		  font: { family: 'monospace' }
+              },
+              plot_bgcolor: localStorage.getItem('plot-bg') || '#e5ecf6',
+              height: 1200,
+              margin: { t: 0, l: 50, r: 30, b: 30 },
+              font: { family: 'monospace' },
+              ...layouts
+	  };
 
-        layouts[xaxisKey] = {
-          anchor: `y${subplotId}`,
-          showticklabels: i === typeOrder.length - 1,
-          type: 'date',
-          domain: [0, 1],
-          matches: 'x2'
-        };
+	  // Sort traces by node name descending (only affects legend order)
+	  traces.sort((a, b) => b.name.localeCompare(a.name));
 
-        layouts[yaxisKey] = {
-          anchor: `x${subplotId}`,
-	  title: `${type} ${typeData[0]?.unit || ''}`,
-          domain: [domainStart, domainEnd],
-          titlefont: { size: 12, family: 'monospace' },
-          tickfont: { size: 10, family: 'monospace' },
-          automargin: true
-        };
-      });
+	  Plotly.react(
+	      'chart', 
+	      traces, 
+	      layout, 
+	      { 
+		  displaylogo: false,
+		  displayModeBar: true,
+		  responsive: true,
+		  modeBarButtonsToAdd: [
+		      'hoverclosest',
+		      'hovercompare',
+		      'toggleSpikelines'
+		  ],
+		  modeBarButtonsToRemove: [
+		      'lasso2d',
+		      'select2d'
+		  ]
+	      }
+	  ).then(() => {
+              const graphDiv = document.getElementById('chart');
 
-      function hexToRgb(hex) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `${r}, ${g}, ${b}`;
+              graphDiv.on('plotly_relayout', function(eventdata) {
+		  if (eventdata['xaxis.range[0]'] || eventdata['xaxis.range[1]']) {
+		      const xaxis = graphDiv.layout.xaxis2;
+		      const range = [xaxis.range[0], xaxis.range[1]];
+		      const update = {};
+		      for (let i = 3; i <= subplotCount; i++) {
+			  update[`xaxis${i}.range[0]`] = range[0];
+			  update[`xaxis${i}.range[1]`] = range[1];
+		      }
+		      Plotly.relayout(graphDiv, update);
+		  }
+              });
+
+	      document.getElementById('plot-controls').innerHTML = `
+  <select id="mode-selector">
+    <option value="markers">Markers</option>
+    <option value="lines+markers">Lines</option>
+    <option value="spline">Splines</option>
+  </select>
+  <button onclick="toggleBgColor()">Background</button>
+  <button onclick="setRange('1d')">1d</button>
+  <button onclick="setRange('2d')">2d</button>
+  <button onclick="setRange('1w')">1w</button>
+  <button onclick="setRange('2w')">2w</button>
+  <button onclick="setRange('1m')">1m</button>
+  <button onclick="setRange('3m')">3m</button>
+  <button onclick="setRange('all')">All</button>
+  <button onclick="resetSettings()">Reset</button>
+`;
+
+	      window.toggleBgColor = () => {
+		  const chartDiv = document.getElementById('chart');
+		  const btn = document.querySelector('button[onclick="toggleBgColor()"]');
+		  const current = chartDiv.layout?.plot_bgcolor || '#e5ecf6';
+		  const newColor = current === '#fafafa' ? '#e5ecf6' : '#fafafa';
+
+		  localStorage.setItem('plot-bg', newColor);
+		  Plotly.relayout(chartDiv, { plot_bgcolor: newColor });
+
+		  if (btn) btn.style.backgroundColor = newColor;
+	      };
+
+	      window.resetSettings = () => {
+		  localStorage.removeItem('plot-mode');
+		  localStorage.removeItem('plot-range');
+		  localStorage.removeItem('plot-bg');
+		  location.reload();
+	      };
+
+              document.getElementById('mode-selector').addEventListener('change', (e) => {
+		  const val = e.target.value;
+		  localStorage.setItem('plot-mode', val);
+		  const update = val === 'spline'
+			? { mode: 'lines+markers', line: { shape: 'spline', opacity: 0.8 }, opacity: 0.8 }
+			: { mode: val, opacity: 0.8 };
+		  Plotly.restyle('chart', update);
+              });
+
+              window.setRange = (label) => {
+		  localStorage.setItem('plot-range', label);
+		  const graphDiv = document.getElementById('chart');
+		  const now = new Date();
+		  let start;
+		  document.querySelectorAll('#plot-controls button').forEach(btn => btn.style.backgroundColor = '');
+		  const activeBtn = document.querySelector(`button[onclick="setRange('${label}')"]`);
+		  if (activeBtn) activeBtn.style.backgroundColor = '#ccc';
+
+		  switch (label) {
+		  case '1d': start = new Date(now - 1 * 864e5); break;
+		  case '2d': start = new Date(now - 2 * 864e5); break;
+		  case '1w': start = new Date(now - 7 * 864e5); break;
+		  case '2w': start = new Date(now - 14 * 864e5); break;
+		  case '1m': start = new Date(now.setMonth(now.getMonth() - 1)); break;
+		  case '3m': start = new Date(now.setMonth(now.getMonth() - 3)); break;
+		  case 'all': Plotly.relayout(graphDiv, { 'xaxis2.autorange': true }); return;
+		  }
+
+		  Plotly.relayout(graphDiv, {
+		      'xaxis2.range': [start.toISOString(), new Date().toISOString()]
+		  });
+              };
+
+              // Restore last used settings
+              const savedMode = localStorage.getItem('plot-mode');
+              if (savedMode) {
+		  document.getElementById('mode-selector').value = savedMode;
+		  document.getElementById('mode-selector').dispatchEvent(new Event('change'));
+              }
+
+              const savedRange = localStorage.getItem('plot-range');
+              if (savedRange) setRange(savedRange);
+              else setRange('1w');
+
+              const savedBg = localStorage.getItem('plot-bg');
+              if (savedBg) Plotly.relayout('chart', { plot_bgcolor: savedBg });
+	      const bgBtn = document.querySelector('button[onclick="toggleBgColor()"]');
+	      if (bgBtn) bgBtn.style.backgroundColor = savedBg;
+	  });
       }
-
-      const layout = {
-        grid: {
-          rows: subplotCount,
-          pattern: 'independent',
-          roworder: 'top to bottom'
-        },
-        showlegend: true,
-        legend: {
-          title: { text: '<b>Node</b>', font: { family: 'monospace' } },
-          y: 0.95,
-          yanchor: 'top',
-          traceorder: 'normal',
-          font: { family: 'monospace' }
-        },
-        plot_bgcolor: localStorage.getItem('plot-bg') || '#e5ecf6',
-        height: 1200,
-        margin: { t: 0, l: 50, r: 30, b: 30 },
-        font: { family: 'monospace' },
-        ...layouts
-      };
-
-      // Sort traces by node name descending (only affects legend order)
-      traces.sort((a, b) => b.name.localeCompare(a.name));
-
-      Plotly.react('chart', traces, layout, { displaylogo: false }).then(() => {
-        const graphDiv = document.getElementById('chart');
-
-        graphDiv.on('plotly_relayout', function(eventdata) {
-          if (eventdata['xaxis.range[0]'] || eventdata['xaxis.range[1]']) {
-            const xaxis = graphDiv.layout.xaxis2;
-            const range = [xaxis.range[0], xaxis.range[1]];
-            const update = {};
-            for (let i = 3; i <= subplotCount; i++) {
-              update[`xaxis${i}.range[0]`] = range[0];
-              update[`xaxis${i}.range[1]`] = range[1];
-            }
-            Plotly.relayout(graphDiv, update);
-          }
-        });
-
-        document.getElementById('plot-controls').innerHTML = `
-          <select id="mode-selector">
-            <option value="markers">Markers</option>
-            <option value="lines+markers">Lines</option>
-            <option value="spline">Splines</option>
-          </select>
-          <button onclick="toggleBgColor()">Background</button>
-          <button onclick="setRange('1d')">1d</button>
-          <button onclick="setRange('2d')">2d</button>
-          <button onclick="setRange('1w')">1w</button>
-          <button onclick="setRange('2w')">2w</button>
-          <button onclick="setRange('1m')">1m</button>
-          <button onclick="setRange('3m')">3m</button>
-          <button onclick="setRange('all')">All</button>
-	  <button onclick="resetSettings()">Reset</button>
-        `;
-
-window.toggleBgColor = () => {
-  const chartDiv = document.getElementById('chart');
-  const btn = document.querySelector('button[onclick="toggleBgColor()"]');
-  const current = chartDiv.layout?.plot_bgcolor || '#e5ecf6';
-  const newColor = current === '#fafafa' ? '#e5ecf6' : '#fafafa';
-
-  localStorage.setItem('plot-bg', newColor);
-  Plotly.relayout(chartDiv, { plot_bgcolor: newColor });
-
-  if (btn) btn.style.backgroundColor = newColor;
-};
-
-	window.resetSettings = () => {
-          localStorage.removeItem('plot-mode');
-          localStorage.removeItem('plot-range');
-          localStorage.removeItem('plot-bg');
-          location.reload();
-	};
-
-        document.getElementById('mode-selector').addEventListener('change', (e) => {
-          const val = e.target.value;
-          localStorage.setItem('plot-mode', val);
-          const update = val === 'spline'
-            ? { mode: 'lines+markers', line: { shape: 'spline', opacity: 0.8 }, opacity: 0.8 }
-            : { mode: val, opacity: 0.8 };
-          Plotly.restyle('chart', update);
-        });
-
-        window.setRange = (label) => {
-          localStorage.setItem('plot-range', label);
-          const graphDiv = document.getElementById('chart');
-          const now = new Date();
-          let start;
-          document.querySelectorAll('#plot-controls button').forEach(btn => btn.style.backgroundColor = '');
-          const activeBtn = document.querySelector(`button[onclick="setRange('${label}')"]`);
-          if (activeBtn) activeBtn.style.backgroundColor = '#ccc';
-
-          switch (label) {
-            case '1d': start = new Date(now - 1 * 864e5); break;
-            case '2d': start = new Date(now - 2 * 864e5); break;
-            case '1w': start = new Date(now - 7 * 864e5); break;
-            case '2w': start = new Date(now - 14 * 864e5); break;
-            case '1m': start = new Date(now.setMonth(now.getMonth() - 1)); break;
-            case '3m': start = new Date(now.setMonth(now.getMonth() - 3)); break;
-            case 'all': Plotly.relayout(graphDiv, { 'xaxis2.autorange': true }); return;
-          }
-
-          Plotly.relayout(graphDiv, {
-            'xaxis2.range': [start.toISOString(), new Date().toISOString()]
-          });
-        };
-
-        // Restore last used settings
-        const savedMode = localStorage.getItem('plot-mode');
-        if (savedMode) {
-          document.getElementById('mode-selector').value = savedMode;
-          document.getElementById('mode-selector').dispatchEvent(new Event('change'));
-        }
-
-        const savedRange = localStorage.getItem('plot-range');
-        if (savedRange) setRange(savedRange);
-        else setRange('1w');
-
-        const savedBg = localStorage.getItem('plot-bg');
-        if (savedBg) Plotly.relayout('chart', { plot_bgcolor: savedBg });
-  const bgBtn = document.querySelector('button[onclick="toggleBgColor()"]');
-  if (bgBtn) bgBtn.style.backgroundColor = savedBg;
-      });
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
