@@ -620,6 +620,22 @@
                 }
             });
 
+	    const leftArrow = document.getElementById('leftHistoryArrow');
+	    const rightArrow = document.getElementById('rightHistoryArrow');
+
+	    leftArrow.onclick = function() { panHistory(-3); };
+	    rightArrow.onclick = function() { panHistory(3); };
+
+	    leftArrow.addEventListener('touchstart', function(e) {
+		e.preventDefault();
+		panHistory(-3);
+	    });
+	    
+	    rightArrow.addEventListener('touchstart', function(e) {
+		e.preventDefault();
+		panHistory(3);
+	    });
+
             document.addEventListener('click', function(e) {
                 const overlay = document.getElementById('inputOverlay');
                 const input = document.getElementById('deviceInput');
@@ -733,11 +749,11 @@
             </select>
         </div>
 
-        <div id="history-container">
-            <div class="history-arrow left" onclick="panHistory(-3)"><</div>
-            <div id="history"></div>
-            <div class="history-arrow right" onclick="panHistory(3)">></div>
-        </div>
+	<div id="history-container">
+	  <div id="leftHistoryArrow" class="history-arrow left"><</div>
+          <div id="history"></div>
+	  <div id="rightHistoryArrow" class="history-arrow right">></div>
+	</div>
 
         <hr>
 
