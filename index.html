@@ -192,24 +192,25 @@
         let plotHistory = [];
         let currentPlotIndex = -1;
 
-	function updatePlot(plotType = null) {
+	function updatePlot(plotType = null, forceUpdate = false) {
 	    const device = document.getElementById('device').value;
+	    if (!device) return;
+
 	    localStorage.setItem('device', device);
 	    const plot = plotType || document.getElementById('plot').value;
 	    const iframe = document.getElementById('plotFrame');
 	    
-	    // Store device in URL for dashboard
 	    const newSrc = plot === 'dashboard'
 		  ? `../../../pipelines/web/dashboard.html?device=${device}`
 		  : plot === 'control-panel'
 		  ? `http://pheno.pclim.net/vh4w/${device}`
 		  : `data/${device}/plots/${plot}.html`;
 
-	    if (
-		currentPlotIndex === -1 ||
-		    plotHistory[currentPlotIndex].src !== newSrc ||
-		    plotHistory[currentPlotIndex].device !== device
-	    ) {
+	    // Only add to history if forced or if actually changed
+	    if (forceUpdate || currentPlotIndex === -1 || 
+		plotHistory[currentPlotIndex].device !== device || 
+		plotHistory[currentPlotIndex].plot !== plot) {
+		
 		plotHistory.push({ device, plot, src: newSrc });
 		currentPlotIndex = plotHistory.length - 1;
 		updateHistory();
@@ -220,6 +221,7 @@
 	    iframe.style.backgroundColor = plot === 'control-panel' ? 'white' : '';
 	    iframe.style.display = 'block';
 	    document.getElementById('noPlotMessage').style.display = 'none';
+	    
 	    if (plotType) {
 		document.getElementById('plot').value = plotType;
 	    }
@@ -473,28 +475,41 @@
             }
         }
 
-        function toggleInputOverlay() {
-            const overlay = document.getElementById('inputOverlay');
-            const input = document.getElementById('deviceInput');
-            if (overlay.style.display === 'none' || overlay.style.display === '') {
-                overlay.style.display = 'block';
-                input.value = '';
-                input.focus();
-            } else {
-                const device = input.value;
-                const deviceSelect = document.getElementById('device');
-                const options = deviceSelect.options;
-                for (let i = 0; i < options.length; i++) {
-                    if (options[i].value === device) {
-                        deviceSelect.selectedIndex = i;
-                        updatePlot();
-                        break;
-                    }
-                }
-                overlay.style.display = 'none';
-            }
-        }
-
+	function toggleInputOverlay() {
+	    const overlay = document.getElementById('inputOverlay');
+	    const input = document.getElementById('deviceInput');
+	    if (overlay.style.display === 'none' || overlay.style.display === '') {
+		overlay.style.display = 'block';
+		input.value = '';
+		input.focus();
+	    } else {
+		const device = input.value.trim();
+		const deviceSelect = document.getElementById('device');
+		
+		// Temporarily disable the onchange handler
+		deviceSelect.onchange = null;
+		
+		// Find exact match
+		for (let i = 0; i < deviceSelect.options.length; i++) {
+		    if (deviceSelect.options[i].value === device) {
+			deviceSelect.selectedIndex = i;
+			overlay.style.display = 'none';
+			
+			// Manually trigger update without creating duplicate history
+			updatePlot(null, true); // Added forceUpdate parameter
+			
+			// Restore onchange handler
+			deviceSelect.onchange = function() { updatePlot(); };
+			return;
+		    }
+		}
+		
+		// Restore onchange handler if no match found
+		deviceSelect.onchange = function() { updatePlot(); };
+		alert('Invalid device: ' + device);
+	    }
+	}
+      
         function toggleHelp() {
             const help = document.getElementById('help');
             help.style.display = help.style.display === 'none' ? 'block' : 'none';
@@ -693,7 +708,7 @@
                 <option value="27">27</option>
                 <option value="28">28</option>
                 <option value="29">29</option>
-                <option value="30">29</option>
+                <option value="30">30</option>
             </select>
         </div>
         <div class="input-panel">
