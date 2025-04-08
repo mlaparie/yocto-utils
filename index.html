@@ -189,6 +189,12 @@
         }
     </style>
     <script>
+      // ✅ Clear plot-related settings on index.html load only
+      window.addEventListener('DOMContentLoaded', () => {
+        localStorage.clear();
+      });
+    </script>
+    <script>
         let plotHistory = [];
         let currentPlotIndex = -1;
 
